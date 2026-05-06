@@ -1,4 +1,4 @@
-const roomMediaMap = {}; 
+export const roomMediaMap = {};
 export function initRoomMedia(roomId) {
   if (!roomMediaMap[roomId]) {
     roomMediaMap[roomId] = {
@@ -79,13 +79,7 @@ export function getTransport(roomId, transportId) {
   const room = roomMediaMap[roomId];
   if (!room) throw new Error("Room not initialized");
 
-  const allTransports = [
-    ...Object.values(room.audioProducers || {}),
-    ...Object.values(room.videoProducers || {}),
-    ...Object.values(room.screenProducers || {}),
-  ].map(p => p.transport);
-
-  const transport = allTransports.find(t => t.id === transportId);
+  const transport = Object.values(room.transports || {}).find(t => t.id === transportId);
   if (!transport) throw new Error("Transport not found");
 
   return transport;

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 import { auth } from '../services/firebase';
@@ -7,6 +7,7 @@ import { signInAnonymously } from 'firebase/auth';
 const Landing = () => {
   const [meetingId, setMeetingId] = useState('');
   const [title, setTitle] = useState('');
+  const [displayName, setDisplayName] = useState(() => localStorage.getItem('altfmeet:name') || '');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
@@ -16,12 +17,15 @@ const Landing = () => {
   }, []);
 
   const handleCreateMeeting = async () => {
+    const name = displayName.trim();
+    if (!name) return alert("Please enter your name");
     setLoading(true);
     try {
       const userId = `user_${Math.random().toString(36).substr(2, 9)}`;
+      localStorage.setItem('altfmeet:name', name);
       const res = await api.createMeeting(userId, title || "New Meeting");
       if (res.meetingId) {
-        navigate(`/room/${res.meetingId}?userId=${userId}`);
+        navigate(`/room/${res.meetingId}?userId=${userId}&name=${encodeURIComponent(name)}`);
       }
     } catch (err) {
       console.error(err);
@@ -32,9 +36,12 @@ const Landing = () => {
   };
 
   const handleJoinMeeting = () => {
+    const name = displayName.trim();
+    if (!name) return alert("Please enter your name");
     if (!meetingId) return alert("Please enter a Meeting ID");
+    localStorage.setItem('altfmeet:name', name);
     const userId = `user_${Math.random().toString(36).substr(2, 9)}`;
-    navigate(`/room/${meetingId}?userId=${userId}`);
+    navigate(`/room/${meetingId}?userId=${userId}&name=${encodeURIComponent(name)}`);
   };
 
   return (
@@ -51,6 +58,17 @@ const Landing = () => {
         </div>
 
         <div className="grid md:grid-cols-2 gap-8 mt-12">
+          <div className="md:col-span-2 glass p-6 rounded-2xl text-left">
+            <label className="block text-sm font-semibold text-slate-300 mb-2">Your name</label>
+            <input
+              type="text"
+              placeholder="Enter your name"
+              className="input-field"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+            />
+          </div>
+
           {/* Create Meeting */}
           <div className="glass p-8 rounded-3xl space-y-6 text-left">
             <h2 className="text-2xl font-bold">Start a Meeting</h2>

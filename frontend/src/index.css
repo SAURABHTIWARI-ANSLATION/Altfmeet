@@ -32,6 +32,147 @@
   .input-field {
     @apply w-full px-4 py-3 rounded-xl bg-dark-surface border border-dark-border focus:border-primary outline-none transition-all;
   }
+
+  .meeting-grid {
+    @apply flex-1 overflow-y-auto p-4 pb-28 pt-24 transition-all duration-300;
+    display: grid;
+    gap: 1rem;
+    align-content: center;
+  }
+
+  .meeting-grid.solo {
+    grid-template-columns: minmax(280px, min(100%, 1100px));
+    justify-content: center;
+  }
+
+  .meeting-grid.two {
+    grid-template-columns: repeat(2, minmax(280px, 1fr));
+  }
+
+  .meeting-grid.four {
+    grid-template-columns: repeat(2, minmax(240px, 1fr));
+  }
+
+  .meeting-grid.six {
+    grid-template-columns: repeat(3, minmax(220px, 1fr));
+  }
+
+  .meeting-grid.many {
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  }
+
+  .video-tile {
+    @apply relative overflow-hidden rounded-xl border border-white/10 bg-slate-950 shadow-xl transition-all duration-300;
+    aspect-ratio: 16 / 9;
+    min-height: 160px;
+  }
+
+  .video-tile.speaking {
+    @apply border-emerald-300 shadow-emerald-400/40;
+    box-shadow: 0 0 0 2px rgb(110 231 183 / 0.45), 0 0 28px rgb(52 211 153 / 0.35);
+  }
+
+  .toolbar-button {
+    @apply relative flex h-10 min-w-10 items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 text-sm font-bold text-white transition-all hover:bg-white/10;
+  }
+
+  .toolbar-button.active {
+    @apply border-primary bg-primary/30 text-white;
+  }
+
+  .notification-badge {
+    @apply absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[11px] font-black text-white;
+  }
+
+  .control-button {
+    @apply flex h-12 w-12 items-center justify-center rounded-xl border border-white/10 bg-dark-surface text-white transition-all hover:bg-dark-border;
+  }
+
+  .control-button.active {
+    @apply border-primary bg-primary text-white shadow-lg shadow-primary/20;
+  }
+
+  .control-button.danger.active {
+    @apply border-red-400 bg-red-500/20 text-red-300 shadow-red-500/20;
+  }
+
+  .control-button.leave {
+    @apply border-red-500/40 bg-red-600 text-white hover:bg-red-700;
+  }
+
+  .side-panel {
+    @apply flex h-full shrink-0 flex-col border-l border-white/10 bg-slate-950/95 shadow-2xl backdrop-blur;
+  }
+
+  .panel-header {
+    @apply flex items-center justify-between border-b border-white/10 p-5;
+  }
+
+  .panel-header h3 {
+    @apply text-lg font-black;
+  }
+
+  .panel-header button {
+    @apply rounded-lg p-2 text-slate-400 transition hover:bg-white/10 hover:text-white;
+  }
+
+  .participant-row {
+    @apply flex items-center gap-3 rounded-lg border border-white/10 bg-white/5 p-3;
+  }
+
+  .chat-row {
+    @apply flex flex-col;
+  }
+
+  .chat-row.mine {
+    @apply items-end;
+  }
+
+  .chat-row.theirs {
+    @apply items-start;
+  }
+
+  .chat-row.grouped {
+    @apply mt-0;
+  }
+
+  .chat-sender {
+    @apply mb-1 px-1 text-xs font-black text-slate-300;
+  }
+
+  .chat-bubble {
+    @apply max-w-[82%] rounded-2xl px-3 py-2 text-sm leading-relaxed;
+    overflow-wrap: anywhere;
+  }
+
+  .chat-row.mine .chat-bubble {
+    @apply rounded-br-md bg-primary text-white;
+  }
+
+  .chat-row.theirs .chat-bubble {
+    @apply rounded-bl-md bg-slate-800 text-slate-100;
+  }
+
+  .chat-time {
+    @apply mt-1 px-1 text-[11px] text-slate-500;
+  }
+
+  .new-message-button {
+    @apply sticky bottom-3 mx-auto mt-4 flex items-center gap-1 rounded-full bg-primary px-4 py-2 text-sm font-bold text-white shadow-lg;
+  }
+}
+
+@media (max-width: 900px) {
+  .meeting-grid.two,
+  .meeting-grid.four,
+  .meeting-grid.six,
+  .meeting-grid.many {
+    grid-template-columns: 1fr;
+  }
+
+  .side-panel {
+    @apply absolute right-0 top-0 z-30 w-full max-w-sm;
+  }
 }
 
 :root {

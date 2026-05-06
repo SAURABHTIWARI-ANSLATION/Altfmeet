@@ -6,7 +6,8 @@ import {
   getTransport,
   getConsumerTransport,
   getProducer,
-  initRoomMedia
+  initRoomMedia,
+  roomMediaMap,
 } from "./sfu.service.js";
 
 export function setupMedia(io) {
@@ -14,6 +15,9 @@ export function setupMedia(io) {
     socket.on("create-transport", async ({ roomId }, callback) => {
       const router = io.mediasoupRouter;
       const { transport, params } = await createWebRtcTransport(router);
+      if (!roomMediaMap[roomId]) initRoomMedia(roomId);
+      roomMediaMap[roomId].transports[transport.id] = transport;
+      roomMediaMap[roomId].transports[socket.id] = transport;
       callback(params);
     });
 
@@ -47,17 +51,5 @@ export function setupMedia(io) {
         callback(params);
       }
     );
-
-    socket.on("create-transport", async ({ roomId }, callback) => {
-      const router = io.mediasoupRouter;
-      const { transport, params } = await createWebRtcTransport(router);
-
-      //Store transport explicitly
-      if (!roomMediaMap[roomId]) initRoomMedia(roomId);
-      roomMediaMap[roomId].transports[socket.id] = transport;
-
-      callback(params);
-    });
-
   });
 }
