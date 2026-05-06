@@ -1,45 +1,60 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowRight, ExternalLink, Link2, Lock, Radio, Sparkles, Users, Video, Zap } from 'lucide-react';
+import { ArrowRight, CheckCircle2, Link2, Lock, Menu, Radio, Users, Video, X, Zap } from 'lucide-react';
 import { signInAnonymously } from 'firebase/auth';
 import { api } from '../services/api';
 import { auth } from '../services/firebase';
 
 const features = [
-  {
-    icon: Video,
-    title: 'Live video that feels immediate',
-    description: 'Peer-to-peer rooms keep calls direct, responsive, and clear for fast-moving teams.',
-  },
-  {
-    icon: Users,
-    title: 'Identity-first meetings',
-    description: 'Names, avatars, mute state, camera state, and presence stay visible across the room.',
-  },
-  {
-    icon: Radio,
-    title: 'Built for real-time flow',
-    description: 'Socket-powered signaling, chat, and participant updates keep everyone in sync.',
-  },
-  {
-    icon: Lock,
-    title: 'No heavy setup',
-    description: 'Create a room, share the invite, and start talking with a clean browser experience.',
-  },
+  ['HD video rooms', 'Join fast with browser-native video that keeps teams moving.', Video],
+  ['Live participant state', 'Names, camera state, mute state, and presence stay readable.', Users],
+  ['Realtime chat', 'Socket-powered chat keeps every message attributed and current.', Radio],
+  ['Secure by default', 'Simple room links, clean identity flow, and no noisy setup.', Lock],
 ];
 
 const steps = [
-  ['01', 'Enter your name', 'Your meeting identity appears everywhere it matters.'],
-  ['02', 'Share the link', 'Copy the room invite and bring people in instantly.'],
-  ['03', 'Talk', 'Video, chat, presence, and controls stay one click away.'],
+  ['01', 'Enter your name', 'Choose the identity everyone sees in the meeting.'],
+  ['02', 'Share the link', 'Copy the room invite from the top bar in one click.'],
+  ['03', 'Talk', 'Video, chat, screen share, and presence stay close at hand.'],
 ];
+
+const stats = [
+  [0, 'teams onboarded'],
+  [3, 'steps to start'],
+  [10, 'messages / 5s rate guard'],
+  [100, 'percent browser based'],
+];
+
+function CountUp({ value, active }) {
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    if (!active) return undefined;
+    const duration = 900;
+    const startedAt = performance.now();
+    let frame;
+    const tick = (now) => {
+      const progress = Math.min((now - startedAt) / duration, 1);
+      setCount(Math.round(value * progress));
+      if (progress < 1) frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [active, value]);
+
+  return <span>{count}</span>;
+}
 
 const Landing = () => {
   const [meetingId, setMeetingId] = useState('');
   const [title, setTitle] = useState('');
   const [displayName, setDisplayName] = useState(() => localStorage.getItem('altfmeet:name') || '');
   const [loading, setLoading] = useState(false);
-  const featuresRef = useRef(null);
+  const [navOpen, setNavOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+  const [statsActive, setStatsActive] = useState(false);
+  const revealRef = useRef(null);
+  const statsRef = useRef(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -47,7 +62,14 @@ const Landing = () => {
   }, []);
 
   useEffect(() => {
-    const cards = Array.from(featuresRef.current?.querySelectorAll('.feature-card') || []);
+    const onScroll = () => setScrolled(window.scrollY > 60);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  useEffect(() => {
+    const items = Array.from(revealRef.current?.querySelectorAll('.feature-card, .step-card') || []);
     const observer = new IntersectionObserver((entries) => {
       entries.forEach((entry) => {
         if (entry.isIntersecting) {
@@ -55,9 +77,22 @@ const Landing = () => {
           observer.unobserve(entry.target);
         }
       });
-    }, { threshold: 0.2 });
+    }, { threshold: 0.18 });
+    items.forEach((item, index) => {
+      item.style.transitionDelay = `${index * 60}ms`;
+      observer.observe(item);
+    });
+    return () => observer.disconnect();
+  }, []);
 
-    cards.forEach((card) => observer.observe(card));
+  useEffect(() => {
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) {
+        setStatsActive(true);
+        observer.disconnect();
+      }
+    }, { threshold: 0.35 });
+    if (statsRef.current) observer.observe(statsRef.current);
     return () => observer.disconnect();
   }, []);
 
@@ -92,156 +127,187 @@ const Landing = () => {
     navigate(`/room/${meetingId.trim()}?userId=${userId}&name=${encodeURIComponent(name)}`);
   };
 
-  return (
-    <div className="app-shell overflow-hidden">
-      <section className="relative min-h-screen">
-        <div className="mesh-bg" />
-        <div className="noise-layer" />
-        <div className="container-xl relative z-10 flex min-h-screen flex-col">
-          <header className="flex items-center justify-between py-6">
-            <div className="wordmark">
-              <div className="logo-mark">A</div>
-              <span>Alt+F Meet</span>
-            </div>
-            <a className="btn-ghost hidden sm:inline-flex" href="https://github.com/SAURABHTIWARI-ANSLATION/Altfmeet" target="_blank" rel="noreferrer">
-              <ExternalLink size={18} />
-              GitHub
-            </a>
-          </header>
+  const navLinks = ['Features', 'How it Works', 'Pricing'];
 
-          <div className="grid flex-1 items-center gap-12 py-10 lg:grid-cols-[1.02fr_0.98fr]">
-            <div className="max-w-3xl">
-              <div className="eyebrow mb-6">
-                <Sparkles size={14} />
-                Production-grade meeting rooms
+  return (
+    <div className="page-shell">
+      <nav className={`nav-shell ${scrolled ? 'scrolled py-2' : 'py-4'}`}>
+        <div className="container-xl flex items-center justify-between">
+          <div className="wordmark">
+            <div className="logo-mark">A</div>
+            <span>Alt+F Meet</span>
+          </div>
+          <div className="hidden items-center gap-8 md:flex">
+            {navLinks.map((link) => (
+              <a key={link} className="nav-link" href={`#${link.toLowerCase().replaceAll(' ', '-')}`}>{link}</a>
+            ))}
+          </div>
+          <div className="hidden items-center gap-3 md:flex">
+            <button className="btn-ghost">Sign In</button>
+            <button className="btn-primary" onClick={handleCreateMeeting} disabled={loading || !displayName.trim()}>
+              Get Started Free
+            </button>
+          </div>
+          <button className="btn-ghost px-3 md:hidden" onClick={() => setNavOpen((open) => !open)} aria-label="Toggle navigation">
+            {navOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
+        </div>
+        {navOpen && (
+          <div className="container-xl mt-3 grid gap-2 border-t border-border pt-3 md:hidden">
+            {navLinks.map((link) => <a key={link} className="nav-link py-2" href={`#${link.toLowerCase().replaceAll(' ', '-')}`}>{link}</a>)}
+            <button className="btn-primary mt-2" onClick={handleCreateMeeting} disabled={loading || !displayName.trim()}>Get Started Free</button>
+          </div>
+        )}
+      </nav>
+
+      <main ref={revealRef}>
+        <section className="hero-bg min-h-screen">
+          <div className="hero-blob one" />
+          <div className="hero-blob two" />
+          <div className="hero-blob three" />
+          <div className="container-xl relative z-10 grid min-h-screen items-center gap-12 py-16 lg:grid-cols-[0.95fr_1.05fr]">
+            <div className="mx-auto max-w-3xl text-center lg:text-left">
+              <div className="badge mb-6">
+                <span className="pulse-dot" />
+                Now in Beta · Free to Use
               </div>
-              <h1 className="h1">Video meetings that stay sharp, named, and in sync.</h1>
-              <p className="body-lg mt-6 max-w-2xl">
-                Alt+F Meet gives teams a polished real-time room with video, chat, participant presence, and meeting controls that feel effortless from the first click.
+              <h1 className="display-title text-text">
+                Meet faster with <span className="gradient-text">crystal-clear video rooms</span>
+              </h1>
+              <p className="mx-auto mt-6 max-w-xl text-xl leading-8 text-secondary lg:mx-0">
+                Alt+F Meet is a polished browser meeting room with names, chat, screen sharing, and live participant presence built in.
               </p>
 
-              <div className="mt-8 grid max-w-2xl gap-3 sm:grid-cols-[1fr_1fr]">
-                <div>
-                  <label className="floating-label mb-2 block">Your name</label>
-                  <input
-                    className="input-field"
-                    value={displayName}
-                    onChange={(event) => setDisplayName(event.target.value)}
-                    placeholder="Ada Lovelace"
-                  />
-                </div>
-                <div>
-                  <label className="floating-label mb-2 block">Meeting title</label>
-                  <input
-                    className="input-field"
-                    value={title}
-                    onChange={(event) => setTitle(event.target.value)}
-                    placeholder="Weekly sync"
-                  />
-                </div>
+              <div className="mt-8 grid gap-3 rounded-2xl border border-border bg-white/80 p-3 shadow-[var(--shadow-md-blue)] backdrop-blur sm:grid-cols-2">
+                <input className="input-field" value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="Your name" />
+                <input className="input-field" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Meeting title" />
               </div>
 
-              <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-                <button className="btn-primary" disabled={loading || !displayName.trim()} onClick={handleCreateMeeting}>
+              <div className="mt-5 flex flex-col justify-center gap-3 sm:flex-row lg:justify-start">
+                <button className="btn-gradient px-6 py-4 text-base" disabled={loading || !displayName.trim()} onClick={handleCreateMeeting}>
                   {loading ? 'Starting...' : 'Start a Meeting'}
-                  <ArrowRight size={18} />
+                  <ArrowRight size={20} />
                 </button>
-                <div className="flex min-w-0 flex-1 gap-3">
-                  <input
-                    className="input-field"
-                    value={meetingId}
-                    onChange={(event) => setMeetingId(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') handleJoinMeeting();
-                    }}
-                    placeholder="Join with code"
-                  />
-                  <button className="btn-secondary shrink-0" disabled={!displayName.trim() || !meetingId.trim()} onClick={handleJoinMeeting}>
+                <div className="flex min-w-0 gap-3">
+                  <input className="input-field" value={meetingId} onChange={(event) => setMeetingId(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && handleJoinMeeting()} placeholder="Join with code" />
+                  <button className="btn-secondary shrink-0 px-5" disabled={!displayName.trim() || !meetingId.trim()} onClick={handleJoinMeeting}>
                     <Link2 size={18} />
-                    <span className="hidden sm:inline">Join</span>
                   </button>
                 </div>
               </div>
+
+              <div className="mt-7 flex items-center justify-center gap-3 text-sm text-muted lg:justify-start">
+                <div className="flex -space-x-2">
+                  {['A', 'M', 'S', 'N'].map((avatar) => <div key={avatar} className="avatar-soft border-2 border-white">{avatar}</div>)}
+                </div>
+                <span>Trusted by 0 teams while the beta gets sharper.</span>
+              </div>
             </div>
 
-            <div className="mock-window">
-              <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+            <div className="browser-mockup">
+              <div className="flex items-center justify-between border-b border-border bg-white px-4 py-3">
                 <div className="flex items-center gap-2">
-                  <span className="h-3 w-3 rounded-full bg-danger" />
+                  <span className="h-3 w-3 rounded-full bg-error" />
                   <span className="h-3 w-3 rounded-full bg-yellow-400" />
                   <span className="h-3 w-3 rounded-full bg-success" />
                 </div>
-                <div className="pill">room/focused-sync</div>
+                <div className="pill">room/product-sync</div>
               </div>
-              <div className="grid gap-3 p-4 sm:grid-cols-2">
-                {['Maya Chen', 'Sam Rivera', 'You', 'Noah Lee'].map((name, index) => (
-                  <div key={name} className={`video-tile min-h-36 ${index === 2 ? 'speaking' : ''}`}>
-                    <div className="flex h-full items-center justify-center bg-app-surface-2">
-                      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary text-xl font-black text-black">
-                        {name.split(' ').map((part) => part[0]).join('').slice(0, 2)}
+              <div className="bg-slate-900 p-4">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {['Maya Chen', 'Sam Rivera', 'You', 'Noah Lee'].map((name, index) => (
+                    <div key={name} className={`video-tile ${index === 2 ? 'speaking' : ''}`}>
+                      <div className="flex h-full items-center justify-center bg-slate-800">
+                        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-brand text-xl font-bold text-white">
+                          {name.split(' ').map((part) => part[0]).join('').slice(0, 2)}
+                        </div>
                       </div>
+                      {name === 'You' && <div className="you-pill">You</div>}
+                      <div className="tile-overlay">{name}</div>
                     </div>
-                    <div className="tile-overlay">
-                      {name}
-                      {name === 'You' && <span className="text-primary">You</span>}
-                    </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-              <div className="flex items-center justify-center gap-3 border-t border-white/10 p-4">
+              <div className="flex items-center justify-center gap-3 border-t border-border bg-white p-4">
                 {[Video, Users, Zap].map((Icon, index) => (
-                  <div key={index} className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/[0.06] text-primary">
-                    <Icon size={18} />
-                  </div>
+                  <div key={index} className="control-button active min-w-14"><Icon size={18} /></div>
                 ))}
               </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      <section ref={featuresRef} className="container-xl py-20">
-        <div className="mb-10 max-w-2xl">
-          <div className="eyebrow mb-4">Why teams use it</div>
-          <h2 className="h2">Everything visible, nothing in the way.</h2>
-        </div>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {features.map(({ icon: Icon, title: featureTitle, description }, index) => (
-            <article key={featureTitle} className="feature-card" style={{ transitionDelay: `${index * 90}ms` }}>
-              <div className="feature-icon"><Icon size={22} /></div>
-              <h3 className="h3">{featureTitle}</h3>
-              <p className="mt-3 text-sm leading-6 text-app-muted">{description}</p>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section className="container-xl pb-20">
-        <div className="surface rounded-2xl p-6 sm:p-8">
-          <div className="mb-8 flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
-            <div>
-              <div className="eyebrow mb-4">How it works</div>
-              <h2 className="h2">Start, share, talk.</h2>
+        <section id="features" className="bg-section py-24">
+          <div className="container-xl">
+            <div className="mx-auto mb-12 max-w-2xl text-center">
+              <div className="badge mb-4">FEATURES</div>
+              <h2 className="h2">Everything a real meeting room needs.</h2>
             </div>
-            <p className="max-w-md text-sm leading-6 text-app-muted">The fastest meeting flow is the one nobody has to explain.</p>
+            <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
+              {features.map(([featureTitle, description, Icon], index) => (
+                <article key={featureTitle} className="feature-card card" style={{ transitionDelay: `${index * 60}ms` }}>
+                  <div className="icon-square mb-5"><Icon size={22} /></div>
+                  <h3 className="h4">{featureTitle}</h3>
+                  <p className="mt-3 small leading-6">{description}</p>
+                </article>
+              ))}
+            </div>
           </div>
-          <div className="relative grid gap-5 md:grid-cols-3">
-            <div className="absolute left-[16%] right-[16%] top-7 hidden border-t border-dashed border-white/15 md:block" />
-            {steps.map(([number, stepTitle, description]) => (
-              <div key={stepTitle} className="relative rounded-2xl border border-white/10 bg-app-surface-2 p-5">
-                <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-full border border-primary/40 bg-primary-soft text-sm font-black text-primary">{number}</div>
-                <h3 className="h3">{stepTitle}</h3>
-                <p className="mt-2 text-sm leading-6 text-app-muted">{description}</p>
+        </section>
+
+        <section id="how-it-works" className="bg-white py-24">
+          <div className="container-xl">
+            <div className="mx-auto mb-12 max-w-2xl text-center">
+              <h2 className="h2">Three steps from idea to conversation.</h2>
+            </div>
+            <div className="relative grid gap-6 md:grid-cols-3">
+              <div className="absolute left-[16%] right-[16%] top-8 hidden border-t border-dashed border-blue-200 md:block" />
+              {steps.map(([number, stepTitle, description], index) => (
+                <article key={stepTitle} className="step-card relative rounded-2xl border border-border bg-white p-7 text-center shadow-[var(--shadow-sm-blue)]" style={{ transitionDelay: `${index * 60}ms` }}>
+                  <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full text-lg font-bold text-white" style={{ background: 'var(--accent-gradient)' }}>{number}</div>
+                  <h3 className="h4">{stepTitle}</h3>
+                  <p className="mt-3 small leading-6">{description}</p>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section ref={statsRef} className="bg-brand-soft py-20">
+          <div className="container-xl grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {stats.map(([value, label]) => (
+              <div key={label} className="stat-card">
+                <div className="text-4xl font-bold text-brand"><CountUp value={value} active={statsActive} />{label.includes('percent') ? '%' : ''}</div>
+                <div className="mt-2 small">{label}</div>
               </div>
             ))}
           </div>
-        </div>
-      </section>
+        </section>
 
-      <footer className="border-t border-white/10 py-8">
-        <div className="container-xl flex flex-col justify-between gap-3 text-sm text-app-muted sm:flex-row">
-          <span className="font-bold text-app-text">Alt+F Meet</span>
-          <span>Focused video rooms for teams that move fast.</span>
+        <section id="pricing" className="relative overflow-hidden py-24 text-white" style={{ background: 'var(--accent-gradient)' }}>
+          <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '18px 18px' }} />
+          <div className="container-xl relative z-10 text-center">
+            <h2 className="h1 text-white">Start a room before the thought disappears.</h2>
+            <p className="mx-auto mt-4 max-w-2xl text-lg leading-8 text-white/82">Beta access is free. Create a room, invite someone, and feel the difference in the first minute.</p>
+            <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
+              <button className="btn-primary bg-white text-brand hover:bg-blue-50" onClick={handleCreateMeeting} disabled={loading || !displayName.trim()}>
+                Start free
+              </button>
+              <button className="btn-ghost border border-white/40 text-white hover:bg-white/10">
+                <CheckCircle2 size={18} />
+                No credit card
+              </button>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <footer className="border-t border-border bg-white py-8">
+        <div className="container-xl flex flex-col justify-between gap-4 text-sm text-secondary md:flex-row md:items-center">
+          <div><strong className="text-text">Alt+F Meet</strong> · Focused video rooms for teams that move fast.</div>
+          <div className="flex gap-5">
+            {navLinks.map((link) => <a key={link} className="hover:text-brand" href={`#${link.toLowerCase().replaceAll(' ', '-')}`}>{link}</a>)}
+          </div>
         </div>
       </footer>
     </div>

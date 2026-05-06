@@ -1,162 +1,147 @@
-# Altfmeet Codebase Graph
+# Altfmeet Frontend Graph
 
-Status: Final UI pass complete. This graph was created after reading the app source, backend handlers, frontend pages, services, styles, config, and bundled assets. Tool/vendor directories such as `.git`, `node_modules`, `frontend/dist`, `.agent`, and `.codex` are local/generated metadata and are not part of the shipped app map.
+Status: White-and-blue SaaS transformation complete. All shipped source/config/asset files were read before UI changes. Local tool metadata (`.agent/`, `.codex/`), `.git`, `node_modules`, and build output are excluded from the shipped app map.
 
-## 1. Component Map
+## Component Map
 
 ### `frontend/src/App.jsx`
-- Purpose: Top-level router.
+- Role: React Router shell.
 - Renders: `/` -> `Landing`, `/room/:roomId` -> `Room`.
 - Props/state: None.
-- UI state: Complete structurally, no visual concerns.
-- Logic: Connected to React Router only.
+- Current UI: Structural only, no visual styling of its own.
+- Planned change: None beyond inheriting the new global design system.
 
 ### `frontend/src/pages/Landing.jsx`
-- Purpose: Home/create/join page.
-- Renders: Hero headline, name input, create meeting card, join meeting card, footer line.
-- Props/state: `meetingId`, `title`, `displayName`, `loading`.
-- Logic: Anonymous Firebase sign-in, creates meetings through REST API, navigates with `userId` and `name`.
-- Current look: Complete. Full-viewport premium hero, startup-grade copy, name/title/code inputs, CTAs, mock meeting window, animated mesh/noise background, feature grid, how-it-works section, and footer.
+- Role: Marketing/start page and meeting entry point.
+- State: `meetingId`, `title`, `displayName`, `loading`.
+- Logic: Firebase anonymous sign-in, `api.createMeeting`, local name persistence, navigation to room with `userId` and `name`.
+- Current UI: Complete white/blue SaaS landing page with sticky navbar, scroll shadow/shrink behavior, mobile hamburger, animated light hero mesh, beta badge, gradient headline words, gradient and secondary CTAs, social proof, premium floating browser mockup, feature cards, how-it-works, count-up stats, final gradient CTA, and white footer.
 - UI debt: Done.
 
 ### `frontend/src/pages/Room.jsx`
-- Purpose: Pre-join and in-meeting experience.
-- Internal UI components/functions:
-  - `VideoTile`: video/avatar tile with name overlay, mic indicator, screen-share badge, speaking border.
-  - `cleanName`, `initialsFor`, `colorForName`, `formatTime`: identity/display utilities.
-  - `renderMessages`: grouped chat row renderer.
-- Props/state: Reads route/search params. Manages `preJoinName`, `hasJoined`, `localStream`, socket id, meeting details, participants, messages, remote streams, chat/sidebar open state, unread count, media state, speaking IDs.
-- Logic: Local media acquisition, RTCPeerConnection creation, offer/answer exchange, ICE buffering, one-time ICE restart, screen track replacement, audio analyser speaking detection, chat send/receive, participant/media state subscription, cleanup on leave/unmount.
-- Current look: Complete. Split pre-join with live preview and setup controls, premium meeting shell, copyable invite badge, duration timer, participant count, autohiding labeled control bar, toast notifications, loading/error states, solo invite state, polished chat and participant panels, responsive mobile overlays.
+- Role: Pre-join and meeting room.
+- Internal component/functions:
+  - `VideoTile`: renders local/remote video tile, avatar initials, name overlay, mic state, screen share state, speaking highlight.
+  - Utility functions: `cleanName`, `initialsFor`, `colorForName`, `formatTime`, `formatDuration`.
+  - `renderMessages`: grouped chat message renderer.
+- State: route/search params, `preJoinName`, `hasJoined`, `localStream`, `localSocketId`, meeting details, participants, messages, remote streams, chat/participants panel state, unread count, media state, speaking IDs, connection state, timer, controls visibility, toasts, copy state.
+- Logic: Media preview/acquisition, WebRTC peer creation, offer/answer/ICE relay, ICE buffering/restart, screen share track replacement, Web Audio speaking detection, Socket.IO room/chat/media events, participant cleanup, copy invite, toast notifications.
+- Current UI: Complete white/blue meeting experience. Pre-join is a white two-column card with live preview. Meeting chrome uses white/blue top and bottom bars, dark video grid, white chat/participants panels, blue copy/timer/count affordances, and SaaS-grade toasts/loading/error/empty states.
 - UI debt: Done.
 
 ### `frontend/src/services/socket.js`
-- Purpose: Socket.IO client singleton and event emit helpers.
+- Role: Socket.IO client singleton and emit helpers.
 - Exports: `initiateSocketConnection`, `disconnectSocket`, `getSocket`, `joinMeeting`, `leaveMeeting`, `sendMessage`, `sendMediaState`.
-- UI rendering: None.
-- Logic state: Real meeting socket flow; hardcoded `http://localhost:5000`.
-- UI debt: None directly, but connection state/errors must be surfaced in Room UI.
+- UI: None.
+- Current state: Working real-time connection helpers.
+- Planned change: None unless UI needs additional event hooks.
 
 ### `frontend/src/services/api.js`
-- Purpose: REST API wrapper.
-- Exports: `createMeeting`, `joinMeeting`, `getMeetingDetails`.
-- Logic state: Connected to backend `/api/meetings`; hardcoded API base.
-- UI debt: None directly.
+- Role: REST API wrapper for meeting creation/join/details.
+- UI: None.
+- Current state: Working helper with hardcoded local backend.
+- Planned change: None.
 
 ### `frontend/src/services/firebase.js`
-- Purpose: Firebase app/auth/firestore initialization.
-- Logic state: Uses Vite env vars. Analytics created browser-side.
-- UI debt: None.
+- Role: Firebase app/auth/firestore initialization.
+- UI: None.
+- Current state: Used by landing auth.
+- Planned change: None.
 
 ### `frontend/src/services/chat.firebase.js`
-- Purpose: Legacy Firestore chat service.
-- Logic state: Not used by current `Room`; replaced by socket chat.
-- UI debt: None. Technical debt: can be removed later if socket chat remains canonical.
+- Role: Legacy Firestore chat service.
+- UI: None.
+- Current state: Not used by current room socket chat.
+- Planned change: None in this UI pass.
 
 ### `frontend/src/index.css`
-- Purpose: Tailwind v4 theme and component classes.
-- Current look: Complete design system. Near-black palette, teal-blue accent, Inter typography, consistent surfaces/buttons/inputs/tiles/panels/toasts, motion tokens, responsive behavior, reduced-motion handling.
-- UI debt: Done.
+- Role: Single global design system and component style layer.
+- Current state: Complete white/blue token set, Inter typography scale, light SaaS components, blue-tinted shadows, gradient CTA, motion primitives, navbar, cards, mockups, stats, prejoin, meeting shell, panels, toasts, responsive breakpoints.
 
-### Removed template files
-- `frontend/src/App.css`, `frontend/src/assets/react.svg`, `frontend/src/assets/vite.svg`, `frontend/src/assets/hero.png`, and `frontend/public/icons.svg` were unused template or stale visual assets and were deleted so the shipped app has one visual language.
+### `frontend/index.html`
+- Role: HTML shell.
+- Current state: Title already `Alt+F Meet`.
+- Planned change: None.
 
-### Assets
-- `frontend/public/favicon.svg`: Vite-style lightning mark, usable as product logo seed.
-- Unused template assets were removed.
+### `frontend/public/favicon.svg`
+- Role: Browser favicon.
+- Current state: Purple/blue Vite-like mark.
+- Planned change: Optional; leave unless needed because it is the only remaining public visual asset.
 
-## 2. Page Map
+## Page Map
 
 ### `/`
-- Current UI state: Full startup-grade landing page with hero, CTAs, product mockup, feature cards, how-it-works, and footer.
-- Working logic: Firebase anonymous auth, meeting creation, local name persistence, join navigation.
-- Missing visually: Nothing known after this pass.
+- Current logic: Create/join meeting works through REST and route navigation.
+- Current visual debt for this brief: Done.
+- Current state: Top-tier white/blue SaaS landing page.
 
-### `/room/:roomId` pre-join state
-- Current UI state: Split desktop pre-join with live tile preview, room badge, name form, setup controls, and permission/error messaging.
-- Working logic: Name validation by disabling button; starts media/socket on join.
-- Missing visually: Nothing known after this pass.
+### `/room/:roomId` pre-join
+- Current logic: Preview media, mic/camera toggles, name validation, join socket.
+- Current visual debt for this brief: Done.
+- Current state: Full-height white page with centered two-column card, live preview on left, setup form on right, blue focus/gradient button states.
 
-### `/room/:roomId` in-meeting state
-- Current UI state: Premium meeting room with branded top bar, copy invite pill, timer, participant count, responsive video grid, empty state, toasts, loading/error overlays, autohiding controls, chat, and participants panels.
-- Working logic: Local/remote streams, participant list, socket chat, media state updates, speaking detection, screen share track replacement, leave cleanup.
-- Missing visually: Nothing known after this pass.
+### `/room/:roomId` meeting room
+- Current logic: WebRTC, chat, participants, media controls, toasts, timer, copy invite, cleanup.
+- Current visual debt for this brief: Done.
+- Current state: White top bar, dark video grid, white bottom control bar, white chat/participants drawers, blue status treatments, mobile full-screen overlays.
 
-## 3. Data Flow Map
+## Data Flow Map
 
-### Meeting creation/join navigation
-1. `Landing` stores display name in localStorage.
-2. Create path calls `api.createMeeting(hostId, title)`.
-3. Join path uses typed meeting ID.
-4. Both navigate to `/room/:roomId?userId=...&name=...`.
+### Meeting creation and navigation
+1. `Landing` captures name/title/code.
+2. Create uses `api.createMeeting(hostId, title)`.
+3. Join uses typed meeting ID.
+4. Both persist `altfmeet:name` and navigate to `/room/:roomId?userId=...&name=...`.
 
-### Room connection
-1. `Room.startMeeting` obtains local media.
-2. `socket.initiateSocketConnection` opens Socket.IO connection.
-3. On socket `connect`, `joinMeeting({ meetingId, userId, name, media })` emits `JOIN_MEETING`.
-4. Backend `signaling.gateway` writes participant into `room-state`.
-5. Backend emits `room:participants`, `CHAT_HISTORY`, `USER_JOINED`, and `room:existing-participants`.
+### Room connection and participant state
+1. `Room.startPreview` obtains local media before joining.
+2. `Room.startMeeting` opens Socket.IO and emits `JOIN_MEETING`.
+3. Backend room state emits `room:participants`, `room:existing-participants`, `USER_JOINED`, `USER_LEFT`.
+4. React state updates `participants`, `remoteStreams`, `visibleParticipants`; grid, sidebar, top count, and tiles re-render.
 
-### Participant UI re-rendering
-1. `room:participants` sets `participants`.
-2. `USER_JOINED` appends participant and existing peers create offers.
-3. `USER_LEFT` removes participant and `cleanupPeer` removes streams.
-4. `participant:media-state` merges mic/camera/screen state.
-5. `visibleParticipants` memo recalculates local-first ordering.
-6. `VideoTile`, participants sidebar, top count, and grid classes re-render.
+### WebRTC media
+1. Existing users create offers for new participant socket IDs.
+2. Offers/answers/ICE relay through backend signaling.
+3. ICE candidates buffer until remote description is set.
+4. `ontrack` stores remote media in `remoteStreams`.
+5. `VideoTile` attaches stream to `<video>` and shows avatar when camera is off.
 
-### WebRTC media flow
-1. Existing participant sees `USER_JOINED` and runs `createOffer(newSocketId)`.
-2. Offers/answers are relayed through backend `OFFER`/`ANSWER`.
-3. ICE candidates are relayed through backend `ICE_CANDIDATE`.
-4. Client buffers incoming ICE until remote description exists, then flushes.
-5. `ontrack` stores `remoteStreams[peerId]`.
-6. `VideoTile` receives stream prop and attaches it to `<video>`.
-7. Connection/ICE failure triggers one `restartIce()` offer attempt.
+### Chat
+1. Chat textarea emits `CHAT_MESSAGE`.
+2. Backend enriches messages with sender metadata, rate limits, stores room history, and broadcasts.
+3. Room appends messages, groups same sender within one minute, manages unread badge and autoscroll/new-message button.
 
-### Chat flow
-1. Chat input sends `sendMessage({ meetingId, content })`.
-2. Backend validates participant identity, rate-limits 10 messages / 5 seconds, enriches with `senderId`, `senderName`, `timestamp`.
-3. Backend stores in in-memory room history and emits `CHAT_MESSAGE`.
-4. Room appends to `messages`, increments unread if panel closed, and either autoscrolls or shows "New message".
-5. `renderMessages` groups same sender within one minute.
+### Media controls
+1. Mic toggles track `.enabled` and emits media state.
+2. Camera stops/reacquires video track and emits media state.
+3. Screen share uses `getDisplayMedia` and `sender.replaceTrack`.
+4. Remote clients update tile/sidebar indicators from `participant:media-state`.
 
-### Media control flow
-1. Mic toggles local audio track `.enabled` and emits `media:state`.
-2. Camera off stops/removes local video track and emits `camOn: false`; camera on reacquires video and `replaceTrack`s peers.
-3. Screen share uses `getDisplayMedia`, `replaceTrack`s peer senders, emits `screenSharing: true`, and restores camera on stop.
-4. Backend broadcasts `participant:media-state`.
-5. Remote tiles and participant rows update mic/camera/screen indicators.
+## UI Debt List For This Pass
 
-## 4. UI Debt List
+1. Done: Replaced dark design system with white/blue professional SaaS system.
+2. Done: Rebuilt landing navbar, hero, features, how-it-works, stats, final CTA, footer.
+3. Done: Converted pre-join to white two-column card with blue focus and gradient CTA.
+4. Done: Converted meeting chrome to white top/bottom bars while preserving dark video grid.
+5. Done: Restyled chat and participants as white SaaS drawers.
+6. Done: Added/adjusted animations: navbar scroll, hero blobs, mockup float, cards/steps/stats entrance, shimmer CTA, pulsing active speaker, unread pop, toast progress.
+7. Done: Added responsive states at desktop, tablet, 768px, and 480px.
+8. Done: Updated this graph to mark completion after verification.
 
-1. Done: `Room` pre-join screen now has live preview, name overlay, setup controls, and permission/error messaging.
-2. Done: `Room` meeting shell now has premium top bar, copy invite, timer, labeled/autohiding controls, solo invite empty state, and toasts.
-3. Done: Chat and participants panels now slide in, use better headers, textarea input, unread badge, and mobile overlay behavior.
-4. Done: `Landing` now has funded-product hero, mockup, feature cards, how-it-works, footer, and entrance animation.
-5. Done: `index.css` now defines one cohesive dark professional system with one teal-blue accent.
-6. Done: Stale template CSS and unused template assets were removed.
-7. Done: `index.html` title is `Alt+F Meet`.
+## Style System Audit
 
-## 5. Style System Audit
-
-- Framework: React 19 + Vite + Tailwind CSS v4 via `@import "tailwindcss"` and `@theme`.
+- Framework: React 19, Vite, Tailwind CSS v4, CSS component layer.
 - Icons: `lucide-react`.
-- Current tokens: `app-bg`, `app-surface`, `app-surface-2`, `app-surface-3`, `app-border`, `app-text`, `app-muted`, `app-faint`, `primary`, `primary-dark`, `primary-soft`, `danger`, `success`.
-- Current palette quality: Cohesive dark professional theme with a single teal-blue brand accent and restrained success/destructive states.
-- Typography: Inter imported globally; consistent `.h1`, `.h2`, `.h3`, `.body-lg`, and label styles.
-- Spacing: Uses Tailwind utilities on a 4px grid.
-- Radius: Panels/cards use 12-16px, video tiles 12px, controls 10-12px, pills full radius.
-- Motion: 200-300ms microinteractions, 300ms panels, feature entrance animation, tile entrance, speaker pulse, reduced-motion handling.
-- Shadows/glow: Standard surfaces, active controls, focus rings, active speaker glow, and toasts all use the design system.
+- Font: Inter loaded via CSS import.
+- Current design: White and very light blue backgrounds, brand blue primary, blue/violet gradient accents, slate text, subtle blue-tinted shadows, consistent 4px spacing, card/button/input/tile radii, accessible focus rings.
 
 ## Completion Tracker
 
-- [x] Phase 1 - Codebase mapping
-- [x] Phase 2 - Design system foundation
-- [x] Phase 3 - Landing page
-- [x] Phase 4 - Pre-join screen
-- [x] Phase 5 - Meeting room UI
-- [x] Phase 6 - Micro-interactions and polish
-- [x] Phase 7 - Responsive behavior
-- [x] Final verification
+- [x] Phase 1 - Read and map codebase
+- [x] Phase 2 - White/blue design system foundation
+- [x] Phase 3 - Landing page transformation
+- [x] Phase 4 - Pre-join screen transformation
+- [x] Phase 5 - Meeting room transformation
+- [x] Phase 6 - Micro-interactions and toast polish
+- [x] Phase 7 - Responsive pass
+- [x] Phase 8 - Final verification

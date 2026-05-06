@@ -40,7 +40,7 @@ function initialsFor(name) {
 }
 
 function colorForName(name) {
-  const colors = ['#2563eb', '#0891b2', '#059669', '#7c3aed', '#c026d3', '#db2777', '#ea580c', '#4f46e5'];
+  const colors = ['#2563eb', '#1d4ed8', '#3b82f6', '#1e40af', '#7c3aed', '#0ea5e9', '#0284c7', '#4338ca'];
   const hash = cleanName(name).split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
   return colors[hash % colors.length];
 }
@@ -82,7 +82,7 @@ function VideoTile({ participant, stream, isLocal, isSpeaking }) {
           className="h-full w-full object-cover"
         />
       ) : (
-        <div className="flex h-full w-full items-center justify-center bg-slate-950">
+        <div className="flex h-full w-full items-center justify-center bg-slate-800">
           <div
             className="flex h-24 w-24 items-center justify-center rounded-full text-3xl font-black text-white shadow-2xl"
             style={{ backgroundColor: colorForName(name) }}
@@ -93,20 +93,21 @@ function VideoTile({ participant, stream, isLocal, isSpeaking }) {
       )}
 
       {media.screenSharing && (
-        <div className="absolute left-4 top-4 rounded-md bg-emerald-500/90 px-3 py-1 text-xs font-bold text-white">
+        <div className="absolute left-4 top-4 rounded-full bg-blue-600 px-3 py-1 text-xs font-semibold text-white">
           Presenting
         </div>
       )}
 
       {!media.micOn && (
-        <div className="absolute right-4 top-4 rounded-full bg-red-500/90 p-2 text-white">
+        <div className="tile-status">
           <MicOff size={16} />
         </div>
       )}
 
-      <div className="absolute bottom-4 left-4 flex items-center gap-2 rounded-md bg-black/60 px-3 py-1.5 text-sm font-semibold text-white backdrop-blur">
+      {isLocal && <div className="you-pill">You</div>}
+
+      <div className="tile-overlay">
         <span>{name}</span>
-        {isLocal && <span className="text-sky-200">(You)</span>}
       </div>
     </div>
   );
@@ -739,11 +740,11 @@ const Room = () => {
 
   if (!hasJoined) {
     return (
-      <div className="app-shell relative flex min-h-screen items-center overflow-hidden p-5">
-        <div className="mesh-bg" />
-        <div className="noise-layer" />
+      <div className="prejoin-page">
+        <div className="hero-blob one" />
+        <div className="hero-blob two" />
         <div className="container-xl relative z-10">
-          <div className="mb-6 flex items-center justify-between">
+          <div className="mb-6 flex items-center justify-between rounded-2xl border border-border bg-white/80 px-4 py-3 backdrop-blur">
             <div className="wordmark">
               <div className="logo-mark">A</div>
               <span>Alt+F Meet</span>
@@ -751,8 +752,8 @@ const Room = () => {
             <div className="pill max-w-[52vw] truncate">{roomId}</div>
           </div>
 
-          <div className="grid items-center gap-8 lg:grid-cols-[1.08fr_0.92fr]">
-            <div className="glass-panel rounded-2xl p-3">
+          <div className="prejoin-card">
+            <div>
               <VideoTile
                 participant={localParticipant}
                 stream={localStream}
@@ -760,21 +761,21 @@ const Room = () => {
                 isSpeaking={speakingIds.has('local')}
               />
               <div className="mt-4 flex items-center justify-center gap-3">
-                <button className={`control-button ${!mediaState.micOn ? 'danger active' : ''}`} onClick={toggleMic} title="Microphone">
+                <button className={`control-button ${mediaState.micOn ? 'active' : 'danger active'}`} onClick={toggleMic} title="Microphone">
                   {mediaState.micOn ? <Mic size={20} /> : <MicOff size={20} />}
                   <span className="label">{mediaState.micOn ? 'Mic on' : 'Muted'}</span>
                 </button>
-                <button className={`control-button ${!mediaState.camOn ? 'danger active' : ''}`} onClick={toggleCamera} title="Camera">
+                <button className={`control-button ${mediaState.camOn ? 'active' : 'danger active'}`} onClick={toggleCamera} title="Camera">
                   {mediaState.camOn ? <Camera size={20} /> : <CameraOff size={20} />}
                   <span className="label">{mediaState.camOn ? 'Camera' : 'Cam off'}</span>
                 </button>
               </div>
             </div>
 
-            <div className="surface rounded-2xl p-6 sm:p-8">
-              <div className="eyebrow mb-5">Pre-join setup</div>
+            <div className="flex flex-col justify-center">
+              <div className="badge mb-5 w-fit">Room · {roomId}</div>
               <h1 className="h2">Ready to join?</h1>
-              <p className="mt-3 text-sm leading-6 text-app-muted">Check your camera and microphone before entering the room.</p>
+              <p className="mt-3 text-sm leading-6 text-secondary">Check your camera and microphone before entering the room.</p>
 
               <label className="floating-label mt-8 block">Your name</label>
               <input
@@ -789,13 +790,13 @@ const Room = () => {
               />
 
               {connectionError && (
-                <div className="mt-4 rounded-xl border border-danger/30 bg-danger/10 p-3 text-sm text-red-200">
+                <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-600">
                   {connectionError}
                 </div>
               )}
 
               <button
-                className="btn-primary mt-6 w-full"
+                className="btn-gradient mt-6 w-full py-4"
                 disabled={!preJoinName.trim()}
                 onClick={startMeeting}
               >
@@ -812,7 +813,7 @@ const Room = () => {
     <div className="meeting-page" onMouseMove={revealControls} onFocus={revealControls}>
       <div className="toast-stack">
         {toasts.map((toast) => (
-          <div key={toast.id} className={`toast ${toast.tone === 'error' ? 'border-danger/30' : toast.tone === 'success' ? 'border-success/30' : ''}`}>
+          <div key={toast.id} className={`toast ${toast.tone === 'error' ? 'error' : toast.tone === 'success' ? 'success' : 'info'}`}>
             {toast.message}
           </div>
         ))}
@@ -823,7 +824,7 @@ const Room = () => {
             <div className="logo-mark">A</div>
             <div className="min-w-0">
               <div className="truncate text-sm font-black">Alt+F Meet</div>
-              <div className="truncate text-xs text-app-muted">{meetingDetails?.title || 'Meeting Room'}</div>
+              <div className="truncate text-xs text-muted">{meetingDetails?.title || 'Meeting Room'}</div>
             </div>
           </div>
 
@@ -837,7 +838,7 @@ const Room = () => {
               {formatDuration(elapsedSeconds)}
             </div>
             <button
-              className={`topbar-button ${isParticipantsOpen ? 'bg-primary-soft text-primary' : ''}`}
+              className={`topbar-button ${isParticipantsOpen ? 'border-brand text-brand' : ''}`}
               onClick={toggleParticipantsPanel}
               title="Participants"
             >
@@ -865,9 +866,9 @@ const Room = () => {
 
         {visibleParticipants.length === 1 && connectionStatus === 'connected' && (
           <div className="solo-empty">
-            <h3 className="text-base font-black text-app-text">Share the link to invite others</h3>
+            <h3 className="text-base font-bold text-text">Share the link to invite others</h3>
             <p className="text-sm">You are the only one here right now.</p>
-            <button className="btn-primary pointer-events-auto" onClick={copyInviteLink}>
+            <button className="btn-gradient pointer-events-auto" onClick={copyInviteLink}>
               <Copy size={16} />
               Copy invite link
             </button>
@@ -875,30 +876,30 @@ const Room = () => {
         )}
 
         {connectionStatus === 'connecting' && (
-          <div className="absolute inset-0 z-40 flex items-center justify-center bg-app-bg/72 backdrop-blur">
-            <div className="surface flex flex-col items-center rounded-2xl p-8 text-center">
+          <div className="absolute inset-0 z-40 flex items-center justify-center bg-white/86 backdrop-blur">
+            <div className="card flex flex-col items-center rounded-2xl p-8 text-center">
               <div className="spinner" />
-              <p className="mt-4 font-bold">Connecting to room...</p>
+              <p className="mt-4 font-semibold text-secondary">Connecting...</p>
             </div>
           </div>
         )}
 
         {connectionStatus === 'error' && (
-          <div className="absolute inset-0 z-40 flex items-center justify-center bg-app-bg/80 p-5 backdrop-blur">
-            <div className="surface max-w-md rounded-2xl p-8 text-center">
+          <div className="absolute inset-0 z-40 flex items-center justify-center bg-white/90 p-5 backdrop-blur">
+            <div className="card max-w-md rounded-2xl p-8 text-center">
               <h2 className="h3">Connection failed</h2>
-              <p className="mt-3 text-sm leading-6 text-app-muted">{connectionError}</p>
+              <p className="mt-3 text-sm leading-6 text-secondary">{connectionError}</p>
               <button className="btn-primary mt-6" onClick={startMeeting}>Retry</button>
             </div>
           </div>
         )}
 
         <div className={`control-bar ${controlsVisible ? '' : 'hidden-idle'}`}>
-            <button className={`control-button ${!mediaState.micOn ? 'danger active' : ''}`} onClick={toggleMic} title="Microphone">
+            <button className={`control-button ${mediaState.micOn ? 'active' : 'danger active'}`} onClick={toggleMic} title="Microphone">
               {mediaState.micOn ? <Mic size={20} /> : <MicOff size={20} />}
               <span className="label">{mediaState.micOn ? 'Mute' : 'Unmute'}</span>
             </button>
-            <button className={`control-button ${!mediaState.camOn ? 'danger active' : ''}`} onClick={toggleCamera} title="Camera">
+            <button className={`control-button ${mediaState.camOn ? 'active' : 'danger active'}`} onClick={toggleCamera} title="Camera">
               {mediaState.camOn ? <Camera size={20} /> : <CameraOff size={20} />}
               <span className="label">{mediaState.camOn ? 'Camera' : 'Cam off'}</span>
             </button>
@@ -940,10 +941,10 @@ const Room = () => {
                     {initialsFor(participant.name)}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate font-semibold">{cleanName(participant.name)} {isLocal && <span className="text-slate-400">(You)</span>}</p>
+                    <p className="truncate font-semibold text-text">{cleanName(participant.name)} {isLocal && <span className="text-brand">(You)</span>}</p>
                   </div>
-                  {participant.media?.micOn === false ? <MicOff size={16} className="text-red-400" /> : <Mic size={16} className="text-slate-400" />}
-                  {participant.media?.camOn === false ? <CameraOff size={16} className="text-red-400" /> : <Camera size={16} className="text-slate-400" />}
+                  {participant.media?.micOn === false ? <MicOff size={16} className="text-error" /> : <Mic size={16} className="text-muted" />}
+                  {participant.media?.camOn === false ? <CameraOff size={16} className="text-error" /> : <Camera size={16} className="text-muted" />}
                 </div>
               );
             })}
