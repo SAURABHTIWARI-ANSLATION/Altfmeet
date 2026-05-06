@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Online Meet</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <h1>Welcome to Online Meet</h1>
+
+  <div id="videos">
+    <video id="localVideo" autoplay muted></video>
+    <div id="remoteVideos"></div>
+  </div>
+
+  <div id="controls">
+    <button id="micToggleBtn">🎤</button>
+    <button id="videoToggleBtn">📷</button>
+    <button id="screenShareBtn">🖥️</button>
+    <button id="recordBtn">⏺️</button>
+    <button id="muteAllBtn">🔇</button>
+    <button id="lockRoomBtn">🔒</button>
+    <button id="chatToggleBtn">💬</button>
+  </div>
+
+  <div id="chatBox" class="hidden">
+    <div id="messages"></div>
+    <input type="text" id="msgInput" placeholder="Type a message..." />
+    <button id="sendBtn">Send</button>
+  </div>
+
+  <div id="participantList">
+    <h3>Participants</h3>
+    <ul id="participants"></ul>
+  </div>
+
+  <button id="createMeetingBtn">Create Meeting</button>
+  <div id="meetingLinkDisplay"></div>
+
+  <h2>Join a Meeting</h2>
+  <input type="text" id="meetingLinkInput" placeholder="Paste meeting link here" />
+  <button id="joinMeetingBtn">Join</button>
+
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <script type="module" src="script.js"></script>
+</body>
+</html>
