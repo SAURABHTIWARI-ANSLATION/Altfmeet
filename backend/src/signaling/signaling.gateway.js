@@ -7,7 +7,7 @@ import {
   getConsumerTransport,
 } from "../media/sfu.service.js";
 
-// const roomMediaMap = {};
+const roomMediaMap = {};
 
 export function setupSignaling(io) {
   io.on("connection", (socket) => {

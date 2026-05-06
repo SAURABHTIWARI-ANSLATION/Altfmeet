@@ -1,26 +1,39 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
-:root {
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
-
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
-
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+@theme {
+  --color-primary: #6366f1;
+  --color-primary-dark: #4f46e5;
+  --color-secondary: #ec4899;
+  --color-accent: #8b5cf6;
+  --color-dark-bg: #0f172a;
+  --color-dark-surface: #1e293b;
+  --color-dark-border: #334155;
 }
 
-body {
-  margin: 0;
-  display: flex;
-  place-items: center;
-  min-width: 320px;
-  min-height: 100vh;
+@layer base {
+  body {
+    @apply bg-dark-bg text-white font-sans antialiased;
+  }
+}
+
+@layer components {
+  .glass {
+    @apply bg-white/10 backdrop-blur-md border border-white/10;
+  }
+  
+  .btn-primary {
+    @apply px-6 py-3 rounded-xl bg-primary hover:bg-primary-dark transition-all duration-300 font-semibold shadow-lg shadow-primary/20;
+  }
+  
+  .btn-secondary {
+    @apply px-6 py-3 rounded-xl bg-dark-surface border border-dark-border hover:bg-dark-border transition-all duration-300 font-semibold;
+  }
+
+  .input-field {
+    @apply w-full px-4 py-3 rounded-xl bg-dark-surface border border-dark-border focus:border-primary outline-none transition-all;
+  }
+}
+
+:root {
+  color-scheme: dark;
 }
