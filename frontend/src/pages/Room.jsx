@@ -4,11 +4,13 @@ import {
   Camera,
   CameraOff,
   ChevronDown,
+  Check,
   LogOut,
   MessageCircle,
   Mic,
   MicOff,
   MonitorUp,
+  Copy,
   PanelRight,
   Send,
   Users,
@@ -48,6 +50,13 @@ function formatTime(timestamp) {
     hour: '2-digit',
     minute: '2-digit',
   }).format(new Date(timestamp || Date.now()));
+}
+
+function formatDuration(totalSeconds) {
+  const hours = Math.floor(totalSeconds / 3600).toString().padStart(2, '0');
+  const minutes = Math.floor((totalSeconds % 3600) / 60).toString().padStart(2, '0');
+  const seconds = Math.floor(totalSeconds % 60).toString().padStart(2, '0');
+  return `${hours}:${minutes}:${seconds}`;
 }
 
 function VideoTile({ participant, stream, isLocal, isSpeaking }) {
@@ -127,6 +136,12 @@ const Room = () => {
   const [showNewMessageButton, setShowNewMessageButton] = useState(false);
   const [mediaState, setMediaState] = useState({ micOn: true, camOn: true, screenSharing: false });
   const [speakingIds, setSpeakingIds] = useState(new Set());
+  const [connectionStatus, setConnectionStatus] = useState('idle');
+  const [connectionError, setConnectionError] = useState('');
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [controlsVisible, setControlsVisible] = useState(true);
+  const [toasts, setToasts] = useState([]);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   const localStreamRef = useRef(null);
   const cameraTrackRef = useRef(null);
@@ -139,8 +154,18 @@ const Room = () => {
   const isNearBottomRef = useRef(true);
   const audioContextRef = useRef(null);
   const analyserCleanupRef = useRef(new Map());
+  const controlsTimerRef = useRef(null);
 
   const displayName = cleanName(preJoinName);
+  const inviteUrl = `${window.location.origin}/room/${roomId}`;
+
+  const addToast = useCallback((message, tone = 'default') => {
+    const id = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    setToasts((current) => [...current, { id, message, tone }].slice(-4));
+    window.setTimeout(() => {
+      setToasts((current) => current.filter((toast) => toast.id !== id));
+    }, 3000);
+  }, []);
 
   const localParticipant = useMemo(() => ({
     socketId: localSocketId || 'local',
@@ -221,6 +246,32 @@ const Room = () => {
       setSpeaking(id, false);
     });
   }, [setSpeaking]);
+
+  const startPreview = useCallback(async () => {
+    if (localStreamRef.current) return localStreamRef.current;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      localStreamRef.current = stream;
+      setLocalStream(stream);
+      cameraTrackRef.current = stream.getVideoTracks()[0] || null;
+      monitorAudio('local', stream);
+      return stream;
+    } catch (err) {
+      console.error('Preview media error:', err);
+      setConnectionError('Camera or microphone access was blocked. You can retry after allowing permissions.');
+      try {
+        const audioOnly = await navigator.mediaDevices.getUserMedia({ audio: true });
+        localStreamRef.current = audioOnly;
+        setLocalStream(audioOnly);
+        setMediaState((current) => ({ ...current, camOn: false }));
+        monitorAudio('local', audioOnly);
+        return audioOnly;
+      } catch (audioErr) {
+        console.error('Audio fallback failed:', audioErr);
+        return null;
+      }
+    }
+  }, [monitorAudio]);
 
   const cleanupPeer = useCallback((peerId) => {
     const peer = peersRef.current.get(peerId);
@@ -360,28 +411,31 @@ const Room = () => {
     const name = cleanName(preJoinName);
     let joinMedia = mediaState;
     localStorage.setItem('altfmeet:name', name);
+    setConnectionStatus('connecting');
+    setConnectionError('');
     setHasJoined(true);
 
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      localStreamRef.current = stream;
-      setLocalStream(stream);
-      cameraTrackRef.current = stream.getVideoTracks()[0] || null;
-      monitorAudio('local', stream);
-    } catch (err) {
-      console.error('Media error:', err);
-      const audioOnly = await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => null);
-      if (audioOnly) {
-        localStreamRef.current = audioOnly;
-        setLocalStream(audioOnly);
-        joinMedia = { ...joinMedia, camOn: false };
-        updateMedia({ camOn: false });
-        monitorAudio('local', audioOnly);
-      }
+    const stream = localStreamRef.current || await startPreview();
+    if (!stream?.getVideoTracks().length) {
+      joinMedia = { ...joinMedia, camOn: false };
     }
 
     const socket = initiateSocketConnection();
-    socket.on('connect', () => {
+    socket.off('connect');
+    socket.off('connect_error');
+    socket.off('room:participants');
+    socket.off('room:existing-participants');
+    socket.off('USER_JOINED');
+    socket.off('OFFER');
+    socket.off('ANSWER');
+    socket.off('ICE_CANDIDATE');
+    socket.off('USER_LEFT');
+    socket.off('participant:media-state');
+    socket.off('CHAT_HISTORY');
+    socket.off('CHAT_MESSAGE');
+
+    const emitJoin = () => {
+      setConnectionStatus('connected');
       setLocalSocketId(socket.id);
       joinMeeting({
         meetingId: roomId,
@@ -389,7 +443,18 @@ const Room = () => {
         name,
         media: joinMedia,
       });
+    };
+
+    socket.on('connect', () => {
+      emitJoin();
     });
+
+    socket.on('connect_error', () => {
+      setConnectionStatus('error');
+      setConnectionError('Could not connect to the meeting server. Check that the backend is running and try again.');
+    });
+
+    if (socket.connected) emitJoin();
 
     socket.on('room:participants', ({ participants: nextParticipants }) => {
       if (Array.isArray(nextParticipants)) setParticipants(nextParticipants);
@@ -402,6 +467,7 @@ const Room = () => {
     });
 
     socket.on('USER_JOINED', (participant) => {
+      addToast(`${cleanName(participant.name)} joined`, 'success');
       setParticipants((current) => {
         const withoutDuplicate = current.filter((item) => item.socketId !== participant.socketId);
         return [...withoutDuplicate, participant];
@@ -454,6 +520,8 @@ const Room = () => {
     });
 
     socket.on('USER_LEFT', ({ socketId }) => {
+      const leavingName = cleanName(participantsRef.current.get(socketId)?.name);
+      addToast(`${leavingName} left`, 'default');
       cleanupPeer(socketId);
       setParticipants((current) => current.filter((participant) => participant.socketId !== socketId));
     });
@@ -481,14 +549,14 @@ const Room = () => {
     });
   }, [
     cleanupPeer,
+    addToast,
     createOffer,
     createPeer,
     flushPendingIce,
     mediaState,
-    monitorAudio,
     preJoinName,
     roomId,
-    updateMedia,
+    startPreview,
     userId,
   ]);
 
@@ -499,8 +567,31 @@ const Room = () => {
   }, [roomId]);
 
   useEffect(() => {
+    if (hasJoined) return undefined;
+    const previewTimer = window.setTimeout(() => {
+      startPreview();
+    }, 0);
+    return () => window.clearTimeout(previewTimer);
+  }, [hasJoined, startPreview]);
+
+  useEffect(() => {
     return cleanupMeeting;
   }, [cleanupMeeting]);
+
+  useEffect(() => {
+    if (!hasJoined) return undefined;
+    const startedAt = Date.now();
+    const timer = window.setInterval(() => {
+      setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [hasJoined]);
+
+  useEffect(() => {
+    if (!hasJoined) return undefined;
+    controlsTimerRef.current = window.setTimeout(() => setControlsVisible(false), 3000);
+    return () => window.clearTimeout(controlsTimerRef.current);
+  }, [hasJoined]);
 
   useEffect(() => {
     if (isNearBottomRef.current && chatScrollRef.current) {
@@ -530,6 +621,7 @@ const Room = () => {
       track.enabled = nextMicOn;
     });
     updateMedia({ micOn: nextMicOn });
+    addToast(nextMicOn ? 'Microphone unmuted' : 'Microphone muted', nextMicOn ? 'success' : 'default');
   };
 
   const toggleCamera = async () => {
@@ -542,6 +634,7 @@ const Room = () => {
       }
       cameraTrackRef.current = null;
       updateMedia({ camOn: false });
+      addToast('Camera off', 'default');
       return;
     }
 
@@ -550,12 +643,15 @@ const Room = () => {
       const [track] = stream.getVideoTracks();
       if (!track) return;
       cameraTrackRef.current = track;
-      localStreamRef.current?.addTrack(track);
+      if (!localStreamRef.current) localStreamRef.current = new MediaStream();
+      localStreamRef.current.addTrack(track);
       setLocalStream(localStreamRef.current ? new MediaStream(localStreamRef.current.getTracks()) : null);
       replaceVideoTrack(track);
       updateMedia({ camOn: true });
+      addToast('Camera on', 'success');
     } catch (err) {
       console.error('Camera restart failed:', err);
+      addToast('Camera could not start', 'error');
     }
   };
 
@@ -565,6 +661,7 @@ const Room = () => {
       const cameraTrack = cameraTrackRef.current || localStreamRef.current?.getVideoTracks()[0] || null;
       if (cameraTrack) replaceVideoTrack(cameraTrack);
       updateMedia({ screenSharing: false, camOn: Boolean(cameraTrack) });
+      addToast('Screen share stopped', 'default');
       return;
     }
 
@@ -574,13 +671,16 @@ const Room = () => {
       screenTrackRef.current = screenTrack;
       replaceVideoTrack(screenTrack);
       updateMedia({ screenSharing: true, camOn: true });
+      addToast('Screen share started', 'success');
       screenTrack.onended = () => {
         const cameraTrack = cameraTrackRef.current || localStreamRef.current?.getVideoTracks()[0] || null;
         if (cameraTrack) replaceVideoTrack(cameraTrack);
         updateMedia({ screenSharing: false, camOn: Boolean(cameraTrack) });
+        addToast('Screen share stopped', 'default');
       };
     } catch (err) {
       console.error('Screen share failed:', err);
+      addToast('Screen share could not start', 'error');
     }
   };
 
@@ -589,6 +689,35 @@ const Room = () => {
     chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
     isNearBottomRef.current = true;
     setShowNewMessageButton(false);
+  };
+
+  const revealControls = () => {
+    setControlsVisible(true);
+    window.clearTimeout(controlsTimerRef.current);
+    controlsTimerRef.current = window.setTimeout(() => setControlsVisible(false), 3000);
+  };
+
+  const copyInviteLink = async () => {
+    try {
+      await navigator.clipboard.writeText(inviteUrl);
+      setLinkCopied(true);
+      addToast('Invite link copied', 'success');
+      window.setTimeout(() => setLinkCopied(false), 1600);
+    } catch (err) {
+      console.error('Copy failed:', err);
+      addToast('Could not copy the invite link', 'error');
+    }
+  };
+
+  const toggleChatPanel = () => {
+    setIsChatOpen((open) => !open);
+    setIsParticipantsOpen(false);
+    setUnreadCount(0);
+  };
+
+  const toggleParticipantsPanel = () => {
+    setIsParticipantsOpen((open) => !open);
+    setIsChatOpen(false);
   };
 
   const renderMessages = () => messages.map((msg, index) => {
@@ -610,59 +739,110 @@ const Room = () => {
 
   if (!hasJoined) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-dark-bg p-6">
-        <div className="w-full max-w-md rounded-2xl border border-white/10 bg-dark-surface p-6 shadow-2xl">
-          <h1 className="text-2xl font-black">Join meeting</h1>
-          <p className="mt-2 text-sm text-slate-400">{roomId}</p>
-          <label className="mt-6 block text-sm font-semibold text-slate-300">Your name</label>
-          <input
-            className="input-field mt-2"
-            value={preJoinName}
-            onChange={(event) => setPreJoinName(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' && preJoinName.trim()) startMeeting();
-            }}
-            autoFocus
-          />
-          <button
-            className="btn-primary mt-6 w-full"
-            disabled={!preJoinName.trim()}
-            onClick={startMeeting}
-          >
-            Join now
-          </button>
+      <div className="app-shell relative flex min-h-screen items-center overflow-hidden p-5">
+        <div className="mesh-bg" />
+        <div className="noise-layer" />
+        <div className="container-xl relative z-10">
+          <div className="mb-6 flex items-center justify-between">
+            <div className="wordmark">
+              <div className="logo-mark">A</div>
+              <span>Alt+F Meet</span>
+            </div>
+            <div className="pill max-w-[52vw] truncate">{roomId}</div>
+          </div>
+
+          <div className="grid items-center gap-8 lg:grid-cols-[1.08fr_0.92fr]">
+            <div className="glass-panel rounded-2xl p-3">
+              <VideoTile
+                participant={localParticipant}
+                stream={localStream}
+                isLocal
+                isSpeaking={speakingIds.has('local')}
+              />
+              <div className="mt-4 flex items-center justify-center gap-3">
+                <button className={`control-button ${!mediaState.micOn ? 'danger active' : ''}`} onClick={toggleMic} title="Microphone">
+                  {mediaState.micOn ? <Mic size={20} /> : <MicOff size={20} />}
+                  <span className="label">{mediaState.micOn ? 'Mic on' : 'Muted'}</span>
+                </button>
+                <button className={`control-button ${!mediaState.camOn ? 'danger active' : ''}`} onClick={toggleCamera} title="Camera">
+                  {mediaState.camOn ? <Camera size={20} /> : <CameraOff size={20} />}
+                  <span className="label">{mediaState.camOn ? 'Camera' : 'Cam off'}</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="surface rounded-2xl p-6 sm:p-8">
+              <div className="eyebrow mb-5">Pre-join setup</div>
+              <h1 className="h2">Ready to join?</h1>
+              <p className="mt-3 text-sm leading-6 text-app-muted">Check your camera and microphone before entering the room.</p>
+
+              <label className="floating-label mt-8 block">Your name</label>
+              <input
+                className="input-field mt-2 text-lg"
+                value={preJoinName}
+                onChange={(event) => setPreJoinName(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && preJoinName.trim()) startMeeting();
+                }}
+                placeholder="Enter your name"
+                autoFocus
+              />
+
+              {connectionError && (
+                <div className="mt-4 rounded-xl border border-danger/30 bg-danger/10 p-3 text-sm text-red-200">
+                  {connectionError}
+                </div>
+              )}
+
+              <button
+                className="btn-primary mt-6 w-full"
+                disabled={!preJoinName.trim()}
+                onClick={startMeeting}
+              >
+                Join Now
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-dark-bg text-white">
-      <main className="relative flex min-w-0 flex-1 flex-col">
-        <header className="absolute left-4 right-4 top-4 z-20 flex items-center justify-between rounded-xl border border-white/10 bg-slate-950/70 px-4 py-3 backdrop-blur">
-          <div className="min-w-0">
-            <h2 className="truncate text-base font-bold">{meetingDetails?.title || 'Meeting Room'}</h2>
-            <p className="truncate text-xs text-slate-400">{roomId}</p>
+    <div className="meeting-page" onMouseMove={revealControls} onFocus={revealControls}>
+      <div className="toast-stack">
+        {toasts.map((toast) => (
+          <div key={toast.id} className={`toast ${toast.tone === 'error' ? 'border-danger/30' : toast.tone === 'success' ? 'border-success/30' : ''}`}>
+            {toast.message}
           </div>
-          <div className="flex items-center gap-2">
+        ))}
+      </div>
+      <main className="relative flex min-w-0 flex-1 flex-col">
+        <header className="meeting-topbar">
+          <div className="wordmark min-w-0">
+            <div className="logo-mark">A</div>
+            <div className="min-w-0">
+              <div className="truncate text-sm font-black">Alt+F Meet</div>
+              <div className="truncate text-xs text-app-muted">{meetingDetails?.title || 'Meeting Room'}</div>
+            </div>
+          </div>
+
+          <button className="topbar-button justify-self-center" onClick={copyInviteLink} title="Copy invite link">
+            {linkCopied ? <Check size={16} /> : <Copy size={16} />}
+            <span className="max-w-[34vw] truncate">{roomId}</span>
+          </button>
+
+          <div className="flex min-w-0 justify-end gap-2">
+            <div className="pill">
+              {formatDuration(elapsedSeconds)}
+            </div>
             <button
-              className={`toolbar-button ${isParticipantsOpen ? 'active' : ''}`}
-              onClick={() => setIsParticipantsOpen((open) => !open)}
+              className={`topbar-button ${isParticipantsOpen ? 'bg-primary-soft text-primary' : ''}`}
+              onClick={toggleParticipantsPanel}
               title="Participants"
             >
               <Users size={18} />
               <span>{visibleParticipants.length}</span>
-            </button>
-            <button
-              className={`toolbar-button ${isChatOpen ? 'active' : ''}`}
-              onClick={() => {
-                setIsChatOpen((open) => !open);
-                setUnreadCount(0);
-              }}
-              title="Chat"
-            >
-              <MessageCircle size={18} />
-              {unreadCount > 0 && <span className="notification-badge">{unreadCount}</span>}
             </button>
           </div>
         </header>
@@ -683,31 +863,69 @@ const Room = () => {
           ))}
         </section>
 
-        <div className="absolute bottom-0 left-0 right-0 z-20 flex justify-center p-4">
-          <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 shadow-2xl backdrop-blur">
+        {visibleParticipants.length === 1 && connectionStatus === 'connected' && (
+          <div className="solo-empty">
+            <h3 className="text-base font-black text-app-text">Share the link to invite others</h3>
+            <p className="text-sm">You are the only one here right now.</p>
+            <button className="btn-primary pointer-events-auto" onClick={copyInviteLink}>
+              <Copy size={16} />
+              Copy invite link
+            </button>
+          </div>
+        )}
+
+        {connectionStatus === 'connecting' && (
+          <div className="absolute inset-0 z-40 flex items-center justify-center bg-app-bg/72 backdrop-blur">
+            <div className="surface flex flex-col items-center rounded-2xl p-8 text-center">
+              <div className="spinner" />
+              <p className="mt-4 font-bold">Connecting to room...</p>
+            </div>
+          </div>
+        )}
+
+        {connectionStatus === 'error' && (
+          <div className="absolute inset-0 z-40 flex items-center justify-center bg-app-bg/80 p-5 backdrop-blur">
+            <div className="surface max-w-md rounded-2xl p-8 text-center">
+              <h2 className="h3">Connection failed</h2>
+              <p className="mt-3 text-sm leading-6 text-app-muted">{connectionError}</p>
+              <button className="btn-primary mt-6" onClick={startMeeting}>Retry</button>
+            </div>
+          </div>
+        )}
+
+        <div className={`control-bar ${controlsVisible ? '' : 'hidden-idle'}`}>
             <button className={`control-button ${!mediaState.micOn ? 'danger active' : ''}`} onClick={toggleMic} title="Microphone">
               {mediaState.micOn ? <Mic size={20} /> : <MicOff size={20} />}
+              <span className="label">{mediaState.micOn ? 'Mute' : 'Unmute'}</span>
             </button>
             <button className={`control-button ${!mediaState.camOn ? 'danger active' : ''}`} onClick={toggleCamera} title="Camera">
               {mediaState.camOn ? <Camera size={20} /> : <CameraOff size={20} />}
+              <span className="label">{mediaState.camOn ? 'Camera' : 'Cam off'}</span>
             </button>
             <button className={`control-button ${mediaState.screenSharing ? 'active' : ''}`} onClick={toggleScreenShare} title="Screen share">
               <MonitorUp size={20} />
+              <span className="label">Share</span>
             </button>
-            <button className="control-button" onClick={() => setIsParticipantsOpen((open) => !open)} title="Participants">
+            <button className={`control-button ${isChatOpen ? 'active' : ''}`} onClick={toggleChatPanel} title="Chat">
+              <MessageCircle size={20} />
+              <span className="label">Chat</span>
+              {unreadCount > 0 && <span className="notification-badge">{unreadCount}</span>}
+            </button>
+            <button className={`control-button ${isParticipantsOpen ? 'active' : ''}`} onClick={toggleParticipantsPanel} title="Participants">
               <PanelRight size={20} />
+              <span className="label">People</span>
             </button>
             <button className="control-button leave" onClick={leaveRoom} title="Leave meeting">
               <LogOut size={20} />
+              <span className="label">Leave</span>
             </button>
-          </div>
         </div>
       </main>
 
       {isParticipantsOpen && (
         <aside className="side-panel w-80">
           <div className="panel-header">
-            <h3>Participants</h3>
+            <h3>Participants ({visibleParticipants.length})</h3>
             <button onClick={() => setIsParticipantsOpen(false)}><X size={18} /></button>
           </div>
           <div className="space-y-2 p-4">
@@ -748,13 +966,18 @@ const Room = () => {
             )}
           </div>
           <form onSubmit={handleSendMessage} className="border-t border-white/10 p-4">
-            <div className="flex gap-2">
-              <input
-                type="text"
+            <div className="flex items-end gap-2">
+              <textarea
                 placeholder="Message everyone"
-                className="input-field"
+                className="textarea-field min-h-12 max-h-32 resize-none"
                 value={newMessage}
                 onChange={(event) => setNewMessage(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && !event.shiftKey) {
+                    event.preventDefault();
+                    handleSendMessage(event);
+                  }
+                }}
               />
               <button type="submit" className="control-button active" title="Send">
                 <Send size={18} />
