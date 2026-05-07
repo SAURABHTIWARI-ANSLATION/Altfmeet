@@ -166,15 +166,16 @@ button:disabled { cursor: not-allowed; }
   .meeting-grid.many { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
   .video-tile { @apply relative overflow-hidden rounded-[14px] border bg-slate-800 transition duration-300; border-color: rgba(255,255,255,0.08); aspect-ratio: 16 / 9; min-height: 160px; animation: tile-enter 300ms var(--ease-spring) both; }
   .video-tile.speaking { border-color: #2563eb; animation: tile-enter 300ms var(--ease-spring) both, speaker-pulse 1.5s ease-in-out infinite; }
-  .presentation-layout { display: grid; grid-template-rows: minmax(0, 1fr) auto; gap: clamp(0.5rem, 1vw, 0.875rem); min-height: 0; overflow: hidden; background: #0f172a; padding: clamp(4.75rem, 8vh, 5.5rem) clamp(0.75rem, 1.4vw, 1.25rem) clamp(5.75rem, 10vh, 6.75rem); }
+  .presentation-layout { display: grid; grid-template-columns: minmax(0, 1fr) clamp(13.5rem, 22vw, 19rem); gap: clamp(0.75rem, 1.2vw, 1.25rem); min-height: 0; overflow: hidden; background: #111827; padding: clamp(4.75rem, 8vh, 5.5rem) clamp(0.75rem, 1.4vw, 1.25rem) clamp(5.75rem, 10vh, 6.75rem); }
   .presentation-stage { @apply flex min-h-0 items-center justify-center overflow-hidden; }
-  .presentation-stage .video-tile { width: 100%; height: 100%; aspect-ratio: auto; min-height: 0; border-radius: 12px; background: #020617; contain: layout paint; }
-  .presentation-stage .video-tile video { width: 100%; height: 100%; object-fit: contain; background: #020617; }
-  .presentation-filmstrip { display: flex; gap: clamp(0.5rem, 1vw, 0.875rem); min-height: clamp(5.5rem, 12vh, 7.75rem); max-height: clamp(5.5rem, 12vh, 7.75rem); overflow-x: auto; overflow-y: hidden; padding-block-end: 0.125rem; contain: layout paint; }
-  .presentation-filmstrip .video-tile { flex: 0 0 auto; width: clamp(9rem, 16vw, 13.75rem); height: clamp(5.5rem, 12vh, 7.75rem); min-height: 0; aspect-ratio: 16 / 9; border-radius: 10px; }
-  .presentation-filmstrip .tile-overlay { bottom: 0.5rem; left: 0.5rem; max-width: calc(100% - 1rem); padding: 0.35rem 0.65rem; font-size: 0.75rem; }
-  .presentation-filmstrip .tile-status { bottom: 0.5rem; right: 0.5rem; height: 2rem; width: 2rem; }
-  .presentation-filmstrip .you-pill { right: 0.5rem; top: 0.5rem; padding: 0.25rem 0.65rem; }
+  .presentation-stage .video-tile { width: 100%; height: 100%; max-height: min(72vh, calc(100vh - 11rem)); aspect-ratio: auto; min-height: 0; border-radius: 12px; background: #050505; contain: layout paint; }
+  .presentation-stage .video-tile video { width: 100%; height: 100%; object-fit: contain; background: #050505; }
+  .presentation-rail { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: center; gap: clamp(0.6rem, 1vw, 0.85rem); min-height: 0; overflow-y: auto; overflow-x: hidden; padding-inline-end: 0.125rem; contain: layout paint; }
+  .presentation-rail .video-tile { width: 100%; min-height: 0; aspect-ratio: 3 / 4; border-radius: 12px; background: #202124; }
+  .presentation-rail .tile-overlay { bottom: 0.55rem; left: 0.55rem; max-width: calc(100% - 1.1rem); padding: 0.35rem 0.6rem; font-size: 0.75rem; }
+  .presentation-rail .tile-status { bottom: 0.55rem; right: 0.55rem; height: 2rem; width: 2rem; }
+  .presentation-rail .you-pill { right: 0.55rem; top: 0.55rem; padding: 0.25rem 0.6rem; }
+  .presentation-more-tile { @apply flex flex-col items-center justify-center gap-2 rounded-[12px] bg-neutral-800 text-sm font-semibold text-white; aspect-ratio: 3 / 4; }
   .presentation-self-card { @apply flex h-full w-full flex-col items-center justify-center rounded-[12px] border text-center; gap: clamp(1rem, 2.2vw, 1.5rem); border-color: rgba(148, 163, 184, 0.28); background: radial-gradient(circle at 50% 20%, rgba(37, 99, 235, 0.2), transparent 22rem), #020617; color: #e2e8f0; contain: layout paint; }
   .presentation-self-icon { @apply flex items-center justify-center rounded-full bg-blue-600 text-white; width: clamp(3.5rem, 8vw, 5rem); height: clamp(3.5rem, 8vw, 5rem); }
   .presentation-self-copy { @apply max-w-xl px-4; }
@@ -245,8 +246,10 @@ button:disabled { cursor: not-allowed; }
   .meeting-topbar { @apply grid-cols-1 justify-items-stretch gap-2; }
   .health-pill { @apply justify-center; }
   .meeting-grid.two, .meeting-grid.four, .meeting-grid.six, .meeting-grid.many { grid-template-columns: 1fr; }
-  .presentation-layout { padding: 8.5rem 0.75rem 5.75rem; }
-  .presentation-filmstrip .video-tile { width: clamp(8.75rem, 42vw, 11rem); }
+  .presentation-layout { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) auto; padding: 8.5rem 0.75rem 5.75rem; }
+  .presentation-stage .video-tile { max-height: none; }
+  .presentation-rail { display: flex; max-height: 7.5rem; overflow-x: auto; overflow-y: hidden; }
+  .presentation-rail .video-tile, .presentation-more-tile { flex: 0 0 auto; width: clamp(8.75rem, 42vw, 11rem); height: clamp(5.5rem, 12vh, 7.25rem); aspect-ratio: 16 / 9; }
   .side-panel { @apply absolute inset-0 h-full w-full max-w-none border-l-0; }
   .control-bar { @apply gap-2 px-2; }
   .control-button { @apply min-w-12 px-2; }

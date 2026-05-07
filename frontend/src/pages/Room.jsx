@@ -208,6 +208,34 @@ function PresentationSelfView({ name, onStop }) {
   );
 }
 
+function ParticipantRail({ participants, localParticipant, localStream, remoteStreams, speakingIds }) {
+  if (!participants.length) return null;
+
+  return (
+    <aside className="presentation-rail" aria-label="Participants">
+      {participants.slice(0, 8).map((participant) => (
+        <VideoTile
+          key={participant.socketId}
+          participant={participant}
+          isLocal={participant.socketId === localParticipant.socketId}
+          isSpeaking={
+            participant.socketId === localParticipant.socketId
+              ? speakingIds.has('local')
+              : speakingIds.has(participant.socketId)
+          }
+          stream={tileStreamFor(participant, localParticipant, localStream, remoteStreams)}
+        />
+      ))}
+      {participants.length > 8 && (
+        <div className="presentation-more-tile">
+          <Users size={22} />
+          <span>{participants.length - 8} others</span>
+        </div>
+      )}
+    </aside>
+  );
+}
+
 const tileStreamFor = (participant, localParticipant, localStream, remoteStreams) => (
   participant.socketId === localParticipant.socketId ? localStream : remoteStreams[participant.socketId]
 );
@@ -1329,23 +1357,13 @@ const Room = () => {
                 />
               )}
             </div>
-            {filmstripParticipants.length > 0 && (
-              <div className="presentation-filmstrip">
-                {filmstripParticipants.map((participant) => (
-                  <VideoTile
-                    key={participant.socketId}
-                    participant={participant}
-                    isLocal={participant.socketId === localParticipant.socketId}
-                    isSpeaking={
-                      participant.socketId === localParticipant.socketId
-                        ? speakingIds.has('local')
-                        : speakingIds.has(participant.socketId)
-                    }
-                    stream={tileStreamFor(participant, localParticipant, localStream, remoteStreams)}
-                  />
-                ))}
-              </div>
-            )}
+            <ParticipantRail
+              participants={filmstripParticipants}
+              localParticipant={localParticipant}
+              localStream={localStream}
+              remoteStreams={remoteStreams}
+              speakingIds={speakingIds}
+            />
           </section>
         ) : (
           <section className={gridClass}>
