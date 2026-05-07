@@ -1,29 +1,48 @@
-export const roomMediaMap = {};
+export const roomMediaMap = new Map();
+
 export function initRoomMedia(roomId) {
-  if (!roomMediaMap[roomId]) {
-    roomMediaMap[roomId] = {
-      transports: {},  
-      audioProducers: {},
-      videoProducers: {},
-      screenProducers: {},
-      consumers: {},
-    };
-  }
+  return getOrCreateRoomMedia(roomId);
 }
 
+export function getOrCreateRoomMedia(roomId) {
+  if (!roomMediaMap.has(roomId)) {
+    roomMediaMap.set(roomId, {
+      peers: new Map(),
+      producers: new Map(),
+    });
+  }
+  return roomMediaMap.get(roomId);
+}
 
+export function getOrCreatePeer(roomId, socket) {
+  const room = getOrCreateRoomMedia(roomId);
+  if (!room.peers.has(socket.id)) {
+    room.peers.set(socket.id, {
+      socketId: socket.id,
+      userId: socket.data.userId || socket.id,
+      name: socket.data.name || socket.id,
+      transports: new Map(),
+      producers: new Map(),
+      consumers: new Map(),
+    });
+  }
+  return room.peers.get(socket.id);
+}
 
 export async function createWebRtcTransport(router) {
-  const transportOptions = {
-    listenIps: [{ ip: "0.0.0.0", announcedIp: process.env.PUBLIC_IP }],
+  const listenIp = process.env.MEDIASOUP_LISTEN_IP || "0.0.0.0";
+  const announcedIp = process.env.PUBLIC_IP || process.env.MEDIASOUP_ANNOUNCED_IP;
+
+  const transport = await router.createWebRtcTransport({
+    listenIps: [{ ip: listenIp, announcedIp }],
     enableUdp: true,
     enableTcp: true,
     preferUdp: true,
-    initialAvailableOutgoingBitrate: 1000000,
-  };
+    initialAvailableOutgoingBitrate: Number(process.env.SFU_INITIAL_BITRATE || 1200000),
+    enableSctp: false,
+  });
 
-  const transport = await router.createWebRtcTransport(transportOptions);
-  await transport.setMaxIncomingBitrate(1500000);
+  await transport.setMaxIncomingBitrate(Number(process.env.SFU_MAX_INCOMING_BITRATE || 1800000));
 
   return {
     transport,
@@ -36,76 +55,50 @@ export async function createWebRtcTransport(router) {
   };
 }
 
-export async function createProducer(io, socket, roomId, transport, kind, rtpParameters, type = kind) {
-  const producer = await transport.produce({
-    kind,
-    rtpParameters,
-    appData: { type }, // 'audio', 'video', or 'screen'
-  });
+export function listProducersForRoom(roomId, excludeSocketId) {
+  const room = roomMediaMap.get(roomId);
+  if (!room) return [];
 
-  producer.on("close", () => {
-    io.to(roomId).emit(`${type.toUpperCase()}_STOPPED`, {
-      socketId: socket.id,
-    });
-  });
-
-  return producer;
-}
-
-export async function createConsumer(router, transport, producer, rtpCapabilities) {
-  if (!router.canConsume({ producerId: producer.id, rtpCapabilities })) {
-    throw new Error("Cannot consume this producer");
-  }
-
-  const consumer = await transport.consume({
-    producerId: producer.id,
-    rtpCapabilities,
-    paused: false,
-  });
-
-  return {
-    consumer,
-    params: {
-      id: consumer.id,
+  return Array.from(room.producers.values())
+    .filter(({ socketId }) => socketId !== excludeSocketId)
+    .map(({ producer, socketId, kind, source, name }) => ({
       producerId: producer.id,
-      kind: consumer.kind,
-      rtpParameters: consumer.rtpParameters,
-      type: producer.appData.type,
-    },
-  };
-}
-
-export function getTransport(roomId, transportId) {
-  const room = roomMediaMap[roomId];
-  if (!room) throw new Error("Room not initialized");
-
-  const transport = Object.values(room.transports || {}).find(t => t.id === transportId);
-  if (!transport) throw new Error("Transport not found");
-
-  return transport;
-}
-
-export function getConsumerTransport(roomId, socketId) {
-  const room = roomMediaMap[roomId];
-  if (!room || !room.consumers || !room.consumers[socketId]) {
-    throw new Error("Consumer transport not found");
-  }
-  return room.consumers[socketId].transport;
+      socketId,
+      kind,
+      source,
+      name,
+    }));
 }
 
 export function getProducer(roomId, producerId) {
-  const room = roomMediaMap[roomId];
-  if (!room) throw new Error("Room not found");
-
-  const allProducers = {
-    ...room.audioProducers,
-    ...room.videoProducers,
-    ...room.screenProducers,
-  };
-
-  const producer = allProducers[producerId];
-  if (!producer) throw new Error("Producer not found");
-
-  return producer;
+  const room = roomMediaMap.get(roomId);
+  const record = room?.producers.get(producerId);
+  return record?.producer || null;
 }
 
+export function getProducerRecord(roomId, producerId) {
+  return roomMediaMap.get(roomId)?.producers.get(producerId) || null;
+}
+
+export function closePeerMedia(socketId) {
+  for (const [roomId, room] of roomMediaMap.entries()) {
+    const peer = room.peers.get(socketId);
+    if (!peer) continue;
+
+    peer.consumers.forEach((consumer) => consumer.close());
+    peer.producers.forEach((producer) => {
+      room.producers.delete(producer.id);
+      producer.close();
+    });
+    peer.transports.forEach((transport) => transport.close());
+    room.peers.delete(socketId);
+
+    if (room.peers.size === 0) {
+      roomMediaMap.delete(roomId);
+    }
+
+    return roomId;
+  }
+
+  return null;
+}

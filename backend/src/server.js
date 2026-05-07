@@ -31,8 +31,8 @@ const io = new Server(server, {
   cors: corsOptions,
 });
 
-// Setup Mediasoup SFU
-setupMediasoup(io);
+// Setup Mediasoup SFU before accepting RTC clients.
+await setupMediasoup(io);
 // Setup signaling and chat
 setupSignaling(io);
 setupChat(io);

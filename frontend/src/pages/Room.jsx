@@ -27,6 +27,7 @@ import {
   sendMessage,
 } from '../services/socket';
 import { api } from '../services/api';
+import { SfuSession } from '../services/sfu';
 
 const DEFAULT_ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }];
 
@@ -125,7 +126,7 @@ function VideoTile({ participant, stream, isLocal, isSpeaking }) {
   const videoRef = useRef(null);
   const name = cleanName(participant?.name);
   const media = participant?.media || {};
-  const showVideo = Boolean(stream && media.camOn !== false);
+  const showVideo = Boolean(stream?.getVideoTracks?.().length && media.camOn !== false);
 
   useEffect(() => {
     if (videoRef.current && stream) {
@@ -213,6 +214,8 @@ const Room = () => {
   const cameraTrackRef = useRef(null);
   const screenTrackRef = useRef(null);
   const peersRef = useRef(new Map());
+  const sfuSessionRef = useRef(null);
+  const remoteTracksRef = useRef(new Map());
   const participantsRef = useRef(new Map());
   const messagesRef = useRef([]);
   const isChatOpenRef = useRef(false);
@@ -353,6 +356,91 @@ const Room = () => {
   useEffect(() => {
     tunePeerSenders();
   }, [qualityMode, tunePeerSenders]);
+
+  const attachRemoteTrack = useCallback(({ socketId, source, kind, track }) => {
+    if (!socketId || !track) return;
+    const tracks = remoteTracksRef.current.get(socketId) || {};
+    tracks[source || kind] = track;
+    remoteTracksRef.current.set(socketId, tracks);
+
+    const stream = new MediaStream();
+    const videoTrack = tracks.screen || tracks.video;
+    if (videoTrack) stream.addTrack(videoTrack);
+    if (tracks.audio) stream.addTrack(tracks.audio);
+    setRemoteStreams((current) => ({ ...current, [socketId]: stream }));
+
+    if (kind === 'audio') {
+      setTimeout(() => {
+        setRemoteStreams((current) => {
+          const stream = current[socketId];
+          if (stream) monitorAudio(socketId, stream);
+          return current;
+        });
+      }, 0);
+    }
+    if (source === 'screen') {
+      setParticipants((current) => current.map((participant) => (
+        participant.socketId === socketId
+          ? { ...participant, media: { ...participant.media, screenSharing: true, camOn: true } }
+          : participant
+      )));
+    }
+  }, [monitorAudio]);
+
+  const removeRemoteProducer = useCallback(({ socketId, source } = {}) => {
+    if (!socketId) return;
+    const tracks = remoteTracksRef.current.get(socketId);
+    if (source && tracks) {
+      delete tracks[source];
+      const stream = new MediaStream();
+      const videoTrack = tracks.screen || tracks.video;
+      if (videoTrack) stream.addTrack(videoTrack);
+      if (tracks.audio) stream.addTrack(tracks.audio);
+      remoteTracksRef.current.set(socketId, tracks);
+      setRemoteStreams((current) => {
+        const next = { ...current };
+        if (stream.getTracks().length) next[socketId] = stream;
+        else delete next[socketId];
+        return next;
+      });
+    }
+    if (source === 'screen') {
+      setParticipants((current) => current.map((participant) => (
+        participant.socketId === socketId
+          ? { ...participant, media: { ...participant.media, screenSharing: false } }
+          : participant
+      )));
+      return;
+    }
+    if (!source) {
+      analyserCleanupRef.current.get(socketId)?.();
+      analyserCleanupRef.current.delete(socketId);
+      remoteTracksRef.current.delete(socketId);
+      setRemoteStreams((current) => {
+        const next = { ...current };
+        delete next[socketId];
+        return next;
+      });
+    }
+  }, []);
+
+  const initializeSfu = useCallback(async (stream) => {
+    if (sfuSessionRef.current) return;
+    const session = new SfuSession({
+      roomId,
+      onTrack: attachRemoteTrack,
+      onProducerClosed: removeRemoteProducer,
+      maxCameraConsumers: window.matchMedia('(max-width: 768px)').matches ? 4 : 12,
+    });
+    sfuSessionRef.current = session;
+    await session.init();
+
+    const audioTrack = stream?.getAudioTracks()[0];
+    const videoTrack = stream?.getVideoTracks()[0];
+    if (audioTrack) await session.publishTrack(audioTrack, 'audio');
+    if (videoTrack) await session.publishTrack(videoTrack, 'video');
+    await session.consumeExistingProducers();
+  }, [attachRemoteTrack, removeRemoteProducer, roomId]);
 
   const startPreview = useCallback(async () => {
     if (localStreamRef.current) return localStreamRef.current;
@@ -520,9 +608,12 @@ const Room = () => {
 
   const cleanupMeeting = useCallback(() => {
     leaveMeeting();
+    sfuSessionRef.current?.close();
+    sfuSessionRef.current = null;
     peersRef.current.forEach((_, peerId) => cleanupPeer(peerId));
     analyserCleanupRef.current.forEach((cleanup) => cleanup());
     analyserCleanupRef.current.clear();
+    remoteTracksRef.current.clear();
     stopAllMedia();
     disconnectSocket();
   }, [cleanupPeer, stopAllMedia]);
@@ -556,6 +647,7 @@ const Room = () => {
     }
 
     const socket = initiateSocketConnection();
+    let sfuStarted = false;
     socket.off('connect');
     socket.off('connect_error');
     socket.off('room:participants');
@@ -578,6 +670,14 @@ const Room = () => {
         name,
         media: joinMedia,
       });
+      if (!sfuStarted) {
+        sfuStarted = true;
+        initializeSfu(stream).catch((err) => {
+          console.error('SFU initialization failed:', err);
+          setConnectionStatus('error');
+          setConnectionError('Media server connection failed. Please retry the meeting.');
+        });
+      }
     };
 
     socket.on('connect', () => {
@@ -596,9 +696,13 @@ const Room = () => {
     });
 
     socket.on('room:existing-participants', ({ participants: existingParticipants }) => {
-      existingParticipants?.forEach((participant) => {
-        if (participant.socketId !== socket.id) createPeer(participant.socketId);
-      });
+      if (Array.isArray(existingParticipants)) {
+        setParticipants((current) => {
+          const byId = new Map(current.map((participant) => [participant.socketId, participant]));
+          existingParticipants.forEach((participant) => byId.set(participant.socketId, participant));
+          return Array.from(byId.values());
+        });
+      }
     });
 
     socket.on('USER_JOINED', (participant) => {
@@ -607,7 +711,6 @@ const Room = () => {
         const withoutDuplicate = current.filter((item) => item.socketId !== participant.socketId);
         return [...withoutDuplicate, participant];
       });
-      createOffer(participant.socketId);
     });
 
     socket.on('OFFER', async ({ from, sdp, fromName }) => {
@@ -685,9 +788,9 @@ const Room = () => {
   }, [
     cleanupPeer,
     addToast,
-    createOffer,
     createPeer,
     flushPendingIce,
+    initializeSfu,
     mediaState,
     preJoinName,
     roomId,
@@ -833,6 +936,7 @@ const Room = () => {
         setLocalStream(localStreamRef.current ? new MediaStream(localStreamRef.current.getTracks()) : null);
       }
       cameraTrackRef.current = null;
+      sfuSessionRef.current?.closeProducer('video');
       updateMedia({ camOn: false });
       addToast('Camera off', 'default');
       return;
@@ -848,6 +952,7 @@ const Room = () => {
       localStreamRef.current.addTrack(track);
       setLocalStream(localStreamRef.current ? new MediaStream(localStreamRef.current.getTracks()) : null);
       replaceVideoTrack(track);
+      await sfuSessionRef.current?.replaceProducerTrack('video', track);
       updateMedia({ camOn: true });
       addToast('Camera on', 'success');
     } catch (err) {
@@ -859,6 +964,7 @@ const Room = () => {
   const toggleScreenShare = async () => {
     if (mediaState.screenSharing) {
       screenTrackRef.current?.stop();
+      sfuSessionRef.current?.closeProducer('screen');
       const cameraTrack = cameraTrackRef.current || localStreamRef.current?.getVideoTracks()[0] || null;
       if (cameraTrack) replaceVideoTrack(cameraTrack);
       updateMedia({ screenSharing: false, camOn: Boolean(cameraTrack) });
@@ -875,10 +981,12 @@ const Room = () => {
       await clampTrack(screenTrack, SCREEN_CONSTRAINTS);
       screenTrackRef.current = screenTrack;
       replaceVideoTrack(screenTrack);
+      await sfuSessionRef.current?.replaceProducerTrack('screen', screenTrack);
       updateMedia({ screenSharing: true, camOn: true });
       addToast('Screen share started', 'success');
       screenTrack.onended = () => {
         const cameraTrack = cameraTrackRef.current || localStreamRef.current?.getVideoTracks()[0] || null;
+        sfuSessionRef.current?.closeProducer('screen');
         if (cameraTrack) replaceVideoTrack(cameraTrack);
         updateMedia({ screenSharing: false, camOn: Boolean(cameraTrack) });
         addToast('Screen share stopped', 'default');
