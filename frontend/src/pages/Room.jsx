@@ -190,6 +190,24 @@ function VideoTile({ participant, stream, isLocal, isSpeaking }) {
   );
 }
 
+function PresentationSelfView({ name, onStop }) {
+  return (
+    <div className="presentation-self-card">
+      <div className="presentation-self-icon">
+        <MonitorUp size={28} />
+      </div>
+      <div className="presentation-self-copy">
+        <h2>You are presenting</h2>
+        <p>Everyone can see your shared screen. Keep this meeting window out of the shared content to avoid a mirror effect.</p>
+      </div>
+      <div className="presentation-self-actions">
+        <span>{cleanName(name)}</span>
+        <button type="button" onClick={onStop}>Stop presenting</button>
+      </div>
+    </div>
+  );
+}
+
 const tileStreamFor = (participant, localParticipant, localStream, remoteStreams) => (
   participant.socketId === localParticipant.socketId ? localStream : remoteStreams[participant.socketId]
 );
@@ -305,6 +323,8 @@ const Room = () => {
     if (!presentingParticipant) return [];
     return visibleParticipants.filter((participant) => participant.socketId !== presentingParticipant.socketId);
   }, [presentingParticipant, visibleParticipants]);
+
+  const isLocalPresenting = presentingParticipant?.socketId === localParticipant.socketId;
 
   useEffect(() => {
     participantCountRef.current = visibleParticipants.length;
@@ -1086,14 +1106,21 @@ const Room = () => {
       const screenStream = await navigator.mediaDevices.getDisplayMedia({
         video: SCREEN_CONSTRAINTS,
         audio: false,
+        selfBrowserSurface: 'exclude',
+        surfaceSwitching: 'include',
+        monitorTypeSurfaces: 'include',
       });
       const [screenTrack] = screenStream.getVideoTracks();
       await clampTrack(screenTrack, SCREEN_CONSTRAINTS);
       const settings = screenTrack.getSettings?.() || {};
-      if (settings.displaySurface === 'browser') {
+      const sharedLabel = screenTrack.label?.toLowerCase?.() || '';
+      if (settings.displaySurface === 'browser' && (sharedLabel.includes('altfmeet') || sharedLabel.includes('alt+f'))) {
         screenTrack.stop();
         addToast('Share a window or full screen, not this meeting tab.', 'error');
         return;
+      }
+      if (settings.displaySurface === 'monitor') {
+        addToast('Move the meeting window away from the shared screen to avoid mirror effect.', 'default');
       }
       screenTrackRef.current = screenTrack;
       replaceVideoTrack(screenTrack);
@@ -1291,16 +1318,16 @@ const Room = () => {
         {presentingParticipant ? (
           <section className="presentation-layout">
             <div className="presentation-stage">
-              <VideoTile
-                participant={presentingParticipant}
-                isLocal={presentingParticipant.socketId === localParticipant.socketId}
-                isSpeaking={
-                  presentingParticipant.socketId === localParticipant.socketId
-                    ? speakingIds.has('local')
-                    : speakingIds.has(presentingParticipant.socketId)
-                }
-                stream={tileStreamFor(presentingParticipant, localParticipant, localStream, remoteStreams)}
-              />
+              {isLocalPresenting ? (
+                <PresentationSelfView name={displayName} onStop={toggleScreenShare} />
+              ) : (
+                <VideoTile
+                  participant={presentingParticipant}
+                  isLocal={false}
+                  isSpeaking={speakingIds.has(presentingParticipant.socketId)}
+                  stream={tileStreamFor(presentingParticipant, localParticipant, localStream, remoteStreams)}
+                />
+              )}
             </div>
             {filmstripParticipants.length > 0 && (
               <div className="presentation-filmstrip">
