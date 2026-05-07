@@ -1034,6 +1034,12 @@ const Room = () => {
       });
       const [screenTrack] = screenStream.getVideoTracks();
       await clampTrack(screenTrack, SCREEN_CONSTRAINTS);
+      const settings = screenTrack.getSettings?.() || {};
+      if (settings.displaySurface === 'browser') {
+        screenTrack.stop();
+        addToast('Share a window or full screen, not this meeting tab.', 'error');
+        return;
+      }
       screenTrackRef.current = screenTrack;
       replaceVideoTrack(screenTrack);
       await sfuSessionRef.current?.replaceProducerTrack('screen', screenTrack);
