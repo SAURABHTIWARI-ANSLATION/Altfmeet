@@ -58,6 +58,7 @@ const Landing = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
+    if (!auth) return;
     signInAnonymously(auth).catch((err) => console.error('Auth error:', err));
   }, []);
 

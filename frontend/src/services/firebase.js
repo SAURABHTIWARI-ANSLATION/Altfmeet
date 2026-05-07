@@ -13,10 +13,18 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const analytics = typeof window !== 'undefined' ? getAnalytics(app) : null;
-const auth = getAuth(app);
-const db = getFirestore(app);
+const requiredConfigKeys = ["apiKey", "authDomain", "projectId", "appId"];
+const hasFirebaseConfig = requiredConfigKeys.every((key) => Boolean(firebaseConfig[key]));
 
-export { app, analytics, auth, db };
+if (!hasFirebaseConfig) {
+  console.warn("Firebase client config is incomplete. Firebase features are disabled.");
+}
+
+const app = hasFirebaseConfig ? initializeApp(firebaseConfig) : null;
+const analytics = app && typeof window !== 'undefined' && firebaseConfig.measurementId
+  ? getAnalytics(app)
+  : null;
+const auth = app ? getAuth(app) : null;
+const db = app ? getFirestore(app) : null;
+
+export { app, analytics, auth, db, hasFirebaseConfig };

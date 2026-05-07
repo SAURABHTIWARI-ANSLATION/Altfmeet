@@ -3,6 +3,8 @@ import { collection, addDoc, query, where, onSnapshot, serverTimestamp } from "f
 
 export const chatService = {
   sendMessage: async (meetingId, userId, message) => {
+    if (!db) return;
+
     try {
       await addDoc(collection(db, "messages"), {
         meetingId,
@@ -16,6 +18,8 @@ export const chatService = {
   },
 
   subscribeToMessages: (meetingId, callback) => {
+    if (!db) return () => {};
+
     // Removed orderBy to avoid mandatory Composite Index requirement
     const q = query(
       collection(db, "messages"),
