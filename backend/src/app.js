@@ -2,22 +2,14 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import { corsOptions } from "./config/cors.js";
 import routes from "./route.js";
 
 dotenv.config();
 
 const app = express();
 
-// Allow common development ports
-app.use(cors({
-  origin: [
-    "http://localhost:5173", 
-    "http://127.0.0.1:5173",
-    "http://localhost:3000",
-    "http://localhost:5500"
-  ],
-  credentials: true
-}));
+app.use(cors(corsOptions));
 
 app.use(express.json());
 

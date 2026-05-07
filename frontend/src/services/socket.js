@@ -1,13 +1,12 @@
 import { io } from "socket.io-client";
-
-const SOCKET_URL = "http://localhost:5000";
+import { BACKEND_URL } from "./config";
 
 let socket;
 
 export const initiateSocketConnection = () => {
   if (socket?.connected) return socket;
 
-  socket = io(SOCKET_URL, {
+  socket = io(BACKEND_URL, {
     transports: ["websocket"],
   });
   
