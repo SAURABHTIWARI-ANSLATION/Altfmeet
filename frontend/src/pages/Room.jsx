@@ -511,6 +511,7 @@ const Room = () => {
       peer.pc.close();
       peersRef.current.delete(peerId);
     }
+    remoteTracksRef.current.delete(peerId);
     analyserCleanupRef.current.get(peerId)?.();
     analyserCleanupRef.current.delete(peerId);
     setRemoteStreams((current) => {
@@ -530,13 +531,18 @@ const Room = () => {
       rtcpMuxPolicy: 'require',
       iceCandidatePoolSize: 4,
     });
-    const peer = { pc, pendingIce: [], restarted: false, videoSender: null };
+    const peer = { pc, pendingIce: [], restarted: false, videoSender: null, audioSender: null };
     peersRef.current.set(peerId, peer);
 
-    localStreamRef.current?.getAudioTracks().forEach((track) => {
+    const audioTracks = localStreamRef.current?.getAudioTracks() || [];
+    if (audioTracks.length) {
+      const [track] = audioTracks;
       const sender = pc.addTrack(track, localStreamRef.current);
+      peer.audioSender = sender;
       configureSender(sender, false);
-    });
+    } else {
+      pc.addTransceiver('audio', { direction: 'sendrecv' });
+    }
 
     const outgoingVideoTrack = screenTrackRef.current || cameraTrackRef.current;
     if (outgoingVideoTrack) {
@@ -556,11 +562,30 @@ const Room = () => {
     };
 
     pc.ontrack = (event) => {
-      const [stream] = event.streams;
-      if (!stream) return;
-      const nextStream = new MediaStream(stream.getTracks());
+      const track = event.track;
+      if (!track) return;
+      const tracks = remoteTracksRef.current.get(peerId) || {};
+      tracks[track.kind] = track;
+      remoteTracksRef.current.set(peerId, tracks);
+      const nextStream = new MediaStream(Object.values(tracks).filter(Boolean));
       setRemoteStreams((current) => ({ ...current, [peerId]: nextStream }));
-      monitorAudio(peerId, nextStream);
+      if (track.kind === 'audio') {
+        monitorAudio(peerId, nextStream);
+      }
+      track.onended = () => {
+        const currentTracks = remoteTracksRef.current.get(peerId) || {};
+        if (currentTracks[track.kind]?.id === track.id) {
+          delete currentTracks[track.kind];
+          remoteTracksRef.current.set(peerId, currentTracks);
+          const rebuiltStream = new MediaStream(Object.values(currentTracks).filter(Boolean));
+          setRemoteStreams((current) => {
+            const next = { ...current };
+            if (rebuiltStream.getTracks().length) next[peerId] = rebuiltStream;
+            else delete next[peerId];
+            return next;
+          });
+        }
+      };
     };
 
     const restartOnce = async () => {
@@ -971,13 +996,43 @@ const Room = () => {
     setNewMessage('');
   };
 
-  const toggleMic = () => {
-    const nextMicOn = !mediaState.micOn;
-    localStreamRef.current?.getAudioTracks().forEach((track) => {
-      track.enabled = nextMicOn;
+  const ensureAudioTrack = useCallback(async () => {
+    const existingTrack = localStreamRef.current?.getAudioTracks()[0];
+    if (existingTrack) return existingTrack;
+
+    const audioStream = await navigator.mediaDevices.getUserMedia({ audio: AUDIO_CONSTRAINTS });
+    const [track] = audioStream.getAudioTracks();
+    await clampTrack(track, AUDIO_CONSTRAINTS);
+    if (!localStreamRef.current) localStreamRef.current = new MediaStream();
+    localStreamRef.current.addTrack(track);
+    setLocalStream(new MediaStream(localStreamRef.current.getTracks()));
+
+    peersRef.current.forEach((peer) => {
+      if (peer.audioSender) {
+        peer.audioSender.replaceTrack(track).catch((err) => console.error('replace audio failed:', err));
+        return;
+      }
+      peer.audioSender = peer.pc.addTrack(track, localStreamRef.current);
+      configureSender(peer.audioSender, false);
     });
-    updateMedia({ micOn: nextMicOn });
-    addToast(nextMicOn ? 'Microphone unmuted' : 'Microphone muted', nextMicOn ? 'success' : 'default');
+
+    return track;
+  }, [configureSender]);
+
+  const toggleMic = async () => {
+    const nextMicOn = !mediaState.micOn;
+    try {
+      const audioTrack = nextMicOn ? await ensureAudioTrack() : localStreamRef.current?.getAudioTracks()[0];
+      if (audioTrack) audioTrack.enabled = nextMicOn;
+      localStreamRef.current?.getAudioTracks().forEach((track) => {
+        track.enabled = nextMicOn;
+      });
+      updateMedia({ micOn: nextMicOn });
+      addToast(nextMicOn ? 'Microphone unmuted' : 'Microphone muted', nextMicOn ? 'success' : 'default');
+    } catch (err) {
+      console.error('Microphone toggle failed:', err);
+      addToast('Microphone could not start', 'error');
+    }
   };
 
   const toggleCamera = async () => {
