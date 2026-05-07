@@ -15,12 +15,14 @@ import { setupMedia } from "./media/media.gateway.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Serve static files from public folder
-app.use(express.static(path.join(__dirname, "../frontend")));
+const frontendDistPath = path.join(__dirname, "../../frontend/dist");
+
+// Serve the built frontend from the repo-level Vite app.
+app.use(express.static(frontendDistPath));
 
 // Catch-all route for SPA (serves index.html for any unknown path)
 app.get("/{*splat}", (req, res) => {
-  res.sendFile(path.join(__dirname, "../frontend", "index.html"));
+  res.sendFile(path.join(frontendDistPath, "index.html"));
 });
 
 const server = http.createServer(app);
