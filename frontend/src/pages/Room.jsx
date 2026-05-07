@@ -30,6 +30,7 @@ import { api } from '../services/api';
 import { SfuSession } from '../services/sfu';
 
 const DEFAULT_ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }];
+const SFU_ENABLED = import.meta.env.VITE_ENABLE_SFU === 'true';
 
 const AUDIO_CONSTRAINTS = {
   echoCancellation: true,
@@ -680,7 +681,7 @@ const Room = () => {
         name,
         media: joinMedia,
       });
-      if (!sfuStarted) {
+      if (SFU_ENABLED && !sfuStarted) {
         sfuStarted = true;
         initializeSfu(stream).catch((err) => {
           console.error('SFU initialization failed:', err);
@@ -712,6 +713,11 @@ const Room = () => {
           existingParticipants.forEach((participant) => byId.set(participant.socketId, participant));
           return Array.from(byId.values());
         });
+        if (!SFU_ENABLED) {
+          existingParticipants.forEach((participant) => {
+            if (participant.socketId !== socket.id) createPeer(participant.socketId);
+          });
+        }
       }
     });
 
@@ -721,6 +727,7 @@ const Room = () => {
         const withoutDuplicate = current.filter((item) => item.socketId !== participant.socketId);
         return [...withoutDuplicate, participant];
       });
+      if (!SFU_ENABLED) createOffer(participant.socketId);
     });
 
     socket.on('OFFER', async ({ from, sdp, fromName }) => {
@@ -798,6 +805,7 @@ const Room = () => {
   }, [
     cleanupPeer,
     addToast,
+    createOffer,
     createPeer,
     flushPendingIce,
     initializeSfu,
