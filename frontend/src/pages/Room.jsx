@@ -190,6 +190,10 @@ function VideoTile({ participant, stream, isLocal, isSpeaking }) {
   );
 }
 
+const tileStreamFor = (participant, localParticipant, localStream, remoteStreams) => (
+  participant.socketId === localParticipant.socketId ? localStream : remoteStreams[participant.socketId]
+);
+
 const Room = () => {
   const { roomId } = useParams();
   const [searchParams] = useSearchParams();
@@ -292,6 +296,15 @@ const Room = () => {
     if (count <= 6) return 'meeting-grid six';
     return 'meeting-grid many';
   }, [visibleParticipants.length]);
+
+  const presentingParticipant = useMemo(() => (
+    visibleParticipants.find((participant) => participant.media?.screenSharing) || null
+  ), [visibleParticipants]);
+
+  const filmstripParticipants = useMemo(() => {
+    if (!presentingParticipant) return [];
+    return visibleParticipants.filter((participant) => participant.socketId !== presentingParticipant.socketId);
+  }, [presentingParticipant, visibleParticipants]);
 
   useEffect(() => {
     participantCountRef.current = visibleParticipants.length;
@@ -1214,21 +1227,55 @@ const Room = () => {
           </div>
         </header>
 
-        <section className={gridClass}>
-          {visibleParticipants.map((participant) => (
-            <VideoTile
-              key={participant.socketId}
-              participant={participant}
-              isLocal={participant.socketId === localParticipant.socketId}
-              isSpeaking={
-                participant.socketId === localParticipant.socketId
-                  ? speakingIds.has('local')
-                  : speakingIds.has(participant.socketId)
-              }
-              stream={participant.socketId === localParticipant.socketId ? localStream : remoteStreams[participant.socketId]}
-            />
-          ))}
-        </section>
+        {presentingParticipant ? (
+          <section className="presentation-layout">
+            <div className="presentation-stage">
+              <VideoTile
+                participant={presentingParticipant}
+                isLocal={presentingParticipant.socketId === localParticipant.socketId}
+                isSpeaking={
+                  presentingParticipant.socketId === localParticipant.socketId
+                    ? speakingIds.has('local')
+                    : speakingIds.has(presentingParticipant.socketId)
+                }
+                stream={tileStreamFor(presentingParticipant, localParticipant, localStream, remoteStreams)}
+              />
+            </div>
+            {filmstripParticipants.length > 0 && (
+              <div className="presentation-filmstrip">
+                {filmstripParticipants.map((participant) => (
+                  <VideoTile
+                    key={participant.socketId}
+                    participant={participant}
+                    isLocal={participant.socketId === localParticipant.socketId}
+                    isSpeaking={
+                      participant.socketId === localParticipant.socketId
+                        ? speakingIds.has('local')
+                        : speakingIds.has(participant.socketId)
+                    }
+                    stream={tileStreamFor(participant, localParticipant, localStream, remoteStreams)}
+                  />
+                ))}
+              </div>
+            )}
+          </section>
+        ) : (
+          <section className={gridClass}>
+            {visibleParticipants.map((participant) => (
+              <VideoTile
+                key={participant.socketId}
+                participant={participant}
+                isLocal={participant.socketId === localParticipant.socketId}
+                isSpeaking={
+                  participant.socketId === localParticipant.socketId
+                    ? speakingIds.has('local')
+                    : speakingIds.has(participant.socketId)
+                }
+                stream={tileStreamFor(participant, localParticipant, localStream, remoteStreams)}
+              />
+            ))}
+          </section>
+        )}
 
         {visibleParticipants.length === 1 && connectionStatus === 'connected' && (
           <div className="solo-empty">
