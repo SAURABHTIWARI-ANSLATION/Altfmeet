@@ -16,4 +16,14 @@ app.use(express.json());
 // All API routes
 app.use("/api", routes);
 
+app.use((err, req, res, _next) => {
+  console.error("API error:", err);
+  const status = Number.isInteger(err?.status) ? err.status : 500;
+  res.status(status).json({
+    success: false,
+    error: status === 500 ? "Internal server error" : err.message,
+    details: process.env.NODE_ENV === "production" ? undefined : err?.message,
+  });
+});
+
 export default app;

@@ -9,6 +9,19 @@ async function authHeaders(extraHeaders = {}) {
   };
 }
 
+async function parseApiResponse(response) {
+  const contentType = response.headers.get("content-type") || "";
+  const isJson = contentType.includes("application/json");
+  const payload = isJson ? await response.json() : { error: await response.text() };
+
+  if (!response.ok) {
+    const message = payload?.error || payload?.message || `Request failed with status ${response.status}`;
+    throw new Error(message);
+  }
+
+  return payload;
+}
+
 export const api = {
   createMeeting: async (hostId, title) => {
     const response = await fetch(`${API_BASE_URL}/meetings/create-meeting`, {
@@ -16,7 +29,7 @@ export const api = {
       headers: await authHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ hostId, title }),
     });
-    return response.json();
+    return parseApiResponse(response);
   },
   joinMeeting: async (meetingId, userId) => {
     const response = await fetch(`${API_BASE_URL}/meetings/${meetingId}/join`, {
@@ -24,18 +37,18 @@ export const api = {
       headers: await authHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ userId }),
     });
-    return response.json();
+    return parseApiResponse(response);
   },
   getMeetingDetails: async (meetingId) => {
     const response = await fetch(`${API_BASE_URL}/meetings/${meetingId}`, {
       headers: await authHeaders(),
     });
-    return response.json();
+    return parseApiResponse(response);
   },
   getIceServers: async () => {
     const response = await fetch(`${API_BASE_URL}/ice-servers`, {
       headers: await authHeaders(),
     });
-    return response.json();
+    return parseApiResponse(response);
   },
 };
