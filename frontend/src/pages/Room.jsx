@@ -129,7 +129,9 @@ function VideoTile({ participant, stream, isLocal, isSpeaking }) {
   const audioRef = useRef(null);
   const name = cleanName(participant?.name);
   const media = participant?.media || {};
-  const showVideo = Boolean(stream?.getVideoTracks?.().length && media.camOn !== false);
+  const audioTrackCount = stream?.getAudioTracks?.().length || 0;
+  const videoTrackCount = stream?.getVideoTracks?.().length || 0;
+  const showVideo = Boolean(videoTrackCount && media.camOn !== false);
 
   useEffect(() => {
     if (videoRef.current && stream) {
@@ -140,11 +142,11 @@ function VideoTile({ participant, stream, isLocal, isSpeaking }) {
       audioRef.current.srcObject = stream;
       audioRef.current.play?.().catch(() => {});
     }
-  }, [isLocal, stream]);
+  }, [audioTrackCount, isLocal, stream, videoTrackCount]);
 
   return (
     <div className={`video-tile ${isSpeaking ? 'speaking' : ''}`}>
-      {!isLocal && stream?.getAudioTracks?.().length > 0 && (
+      {!isLocal && audioTrackCount > 0 && (
         <audio ref={audioRef} autoPlay playsInline />
       )}
 
@@ -543,8 +545,9 @@ const Room = () => {
     pc.ontrack = (event) => {
       const [stream] = event.streams;
       if (!stream) return;
-      setRemoteStreams((current) => ({ ...current, [peerId]: stream }));
-      monitorAudio(peerId, stream);
+      const nextStream = new MediaStream(stream.getTracks());
+      setRemoteStreams((current) => ({ ...current, [peerId]: nextStream }));
+      monitorAudio(peerId, nextStream);
     };
 
     const restartOnce = async () => {
