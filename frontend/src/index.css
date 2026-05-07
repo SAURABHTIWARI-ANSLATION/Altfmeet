@@ -166,23 +166,27 @@ button:disabled { cursor: not-allowed; }
   .meeting-grid.many { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
   .video-tile { @apply relative overflow-hidden rounded-[14px] border bg-slate-800 transition duration-300; border-color: rgba(255,255,255,0.08); aspect-ratio: 16 / 9; min-height: 160px; animation: tile-enter 300ms var(--ease-spring) both; }
   .video-tile.speaking { border-color: #2563eb; animation: tile-enter 300ms var(--ease-spring) both, speaker-pulse 1.5s ease-in-out infinite; }
-  .presentation-layout { display: grid; grid-template-columns: minmax(0, 1fr) clamp(13.5rem, 22vw, 19rem); gap: clamp(0.75rem, 1.2vw, 1.25rem); min-height: 0; overflow: hidden; background: #111827; padding: clamp(4.75rem, 8vh, 5.5rem) clamp(0.75rem, 1.4vw, 1.25rem) clamp(5.75rem, 10vh, 6.75rem); }
+  .presentation-layout { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) clamp(13.5rem, 22vw, 19rem); gap: clamp(0.75rem, 1.2vw, 1.25rem); min-height: 0; overflow: hidden; background: radial-gradient(circle at 24% 18%, rgba(37, 99, 235, 0.14), transparent 28rem), #111827; padding: clamp(4.75rem, 8vh, 5.5rem) clamp(0.75rem, 1.4vw, 1.25rem) clamp(5.75rem, 10vh, 6.75rem); }
   .presentation-stage { @apply flex min-h-0 items-center justify-center overflow-hidden; }
   .presentation-stage .video-tile { width: 100%; height: 100%; max-height: min(72vh, calc(100vh - 11rem)); aspect-ratio: auto; min-height: 0; border-radius: 12px; background: #050505; contain: layout paint; }
   .presentation-stage .video-tile video { width: 100%; height: 100%; object-fit: contain; background: #050505; }
-  .presentation-rail { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: center; gap: clamp(0.6rem, 1vw, 0.85rem); min-height: 0; overflow-y: auto; overflow-x: hidden; padding-inline-end: 0.125rem; contain: layout paint; }
+  .presentation-rail { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: center; gap: clamp(0.6rem, 1vw, 0.85rem); min-height: 0; overflow-y: auto; overflow-x: hidden; padding-block: 0.25rem; padding-inline-end: 0.125rem; contain: layout paint; }
   .presentation-rail .video-tile { width: 100%; min-height: 0; aspect-ratio: 3 / 4; border-radius: 12px; background: #202124; }
   .presentation-rail .tile-overlay { bottom: 0.55rem; left: 0.55rem; max-width: calc(100% - 1.1rem); padding: 0.35rem 0.6rem; font-size: 0.75rem; }
   .presentation-rail .tile-status { bottom: 0.55rem; right: 0.55rem; height: 2rem; width: 2rem; }
   .presentation-rail .you-pill { right: 0.55rem; top: 0.55rem; padding: 0.25rem 0.6rem; }
   .presentation-more-tile { @apply flex flex-col items-center justify-center gap-2 rounded-[12px] bg-neutral-800 text-sm font-semibold text-white; aspect-ratio: 3 / 4; }
-  .presentation-self-card { @apply flex h-full w-full flex-col items-center justify-center rounded-[12px] border text-center; gap: clamp(1rem, 2.2vw, 1.5rem); border-color: rgba(148, 163, 184, 0.28); background: radial-gradient(circle at 50% 20%, rgba(37, 99, 235, 0.2), transparent 22rem), #020617; color: #e2e8f0; contain: layout paint; }
-  .presentation-self-icon { @apply flex items-center justify-center rounded-full bg-blue-600 text-white; width: clamp(3.5rem, 8vw, 5rem); height: clamp(3.5rem, 8vw, 5rem); }
+  .presentation-self-card { @apply relative flex h-full w-full flex-col items-center justify-center overflow-hidden rounded-[16px] border text-center; min-height: clamp(28rem, 62vh, 48rem); border-color: rgba(148, 163, 184, 0.22); background: linear-gradient(145deg, rgba(2, 6, 23, 0.96), rgba(15, 23, 42, 0.92)); color: #e2e8f0; contain: layout paint; box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 24px 80px rgba(2, 6, 23, 0.26); }
+  .presentation-self-glow { position: absolute; inset: 0; background: radial-gradient(circle at 50% 34%, rgba(37, 99, 235, 0.28), transparent 17rem), radial-gradient(circle at 80% 15%, rgba(14, 165, 233, 0.13), transparent 22rem); opacity: 0.9; }
+  .presentation-self-content { @apply relative z-10 flex flex-col items-center; gap: clamp(1rem, 2.2vw, 1.45rem); transform: translateY(-0.75rem); }
+  .presentation-self-icon { @apply flex items-center justify-center rounded-full bg-blue-600 text-white; width: clamp(4rem, 8vw, 5.75rem); height: clamp(4rem, 8vw, 5.75rem); box-shadow: 0 20px 60px rgba(37,99,235,0.35); }
   .presentation-self-copy { @apply max-w-xl px-4; }
-  .presentation-self-copy h2 { font-size: clamp(1.5rem, 3vw, 2.35rem); font-weight: 800; color: white; }
-  .presentation-self-copy p { @apply mt-3 text-sm leading-6 text-slate-300; }
-  .presentation-self-actions { @apply flex flex-wrap items-center justify-center gap-3 text-sm font-semibold text-slate-300; }
-  .presentation-self-actions button { @apply rounded-full bg-red-500 px-4 py-2 text-white transition hover:bg-red-600; }
+  .presentation-live-chip { @apply mx-auto mb-4 inline-flex items-center gap-2 rounded-full border border-blue-400/30 bg-blue-500/10 px-3 py-1 text-xs font-bold uppercase text-blue-100; letter-spacing: 0; }
+  .presentation-live-chip span { @apply h-2 w-2 rounded-full bg-emerald-400; box-shadow: 0 0 0 4px rgba(52,211,153,0.14); }
+  .presentation-self-copy h2 { font-size: clamp(1.85rem, 4vw, 3.5rem); font-weight: 850; color: white; line-height: 1.05; }
+  .presentation-self-copy p { @apply mt-4 text-sm leading-6 text-slate-300 md:text-base; }
+  .presentation-self-actions { @apply absolute bottom-5 left-1/2 z-10 flex -translate-x-1/2 flex-wrap items-center justify-center gap-3 rounded-full border border-white/10 bg-slate-950/55 px-3 py-2 text-sm font-semibold text-slate-200 backdrop-blur; }
+  .presentation-self-actions button { @apply rounded-full bg-red-500 px-4 py-2 text-white transition hover:bg-red-600; box-shadow: 0 12px 28px rgba(239,68,68,0.25); }
   .tile-overlay { @apply absolute bottom-4 left-4 flex max-w-[70%] items-center gap-2 rounded-full bg-slate-950/70 px-3 py-1.5 text-sm font-semibold text-white backdrop-blur; }
   .tile-status { @apply absolute bottom-4 right-4 flex h-9 w-9 items-center justify-center rounded-full bg-error text-white; }
   .you-pill { @apply absolute right-4 top-4 rounded-full bg-brand px-3 py-1 text-xs font-semibold text-white; }

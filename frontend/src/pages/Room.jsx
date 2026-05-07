@@ -193,14 +193,21 @@ function VideoTile({ participant, stream, isLocal, isSpeaking }) {
 function PresentationSelfView({ name, onStop }) {
   return (
     <div className="presentation-self-card">
-      <div className="presentation-self-icon">
-        <MonitorUp size={28} />
+      <div className="presentation-self-glow" aria-hidden="true" />
+      <div className="presentation-self-content">
+        <div className="presentation-self-icon">
+          <MonitorUp size={30} />
+        </div>
+        <div className="presentation-self-copy">
+          <div className="presentation-live-chip">
+            <span />
+            Presenting now
+          </div>
+          <h2>You are presenting</h2>
+          <p>Your screen is visible to everyone in this meeting.</p>
+        </div>
       </div>
-      <div className="presentation-self-copy">
-        <h2>You are presenting</h2>
-        <p>Everyone can see your shared screen. Keep this meeting window out of the shared content to avoid a mirror effect.</p>
-      </div>
-      <div className="presentation-self-actions">
+      <div className="presentation-self-actions" aria-label="Presentation controls">
         <span>{cleanName(name)}</span>
         <button type="button" onClick={onStop}>Stop presenting</button>
       </div>
