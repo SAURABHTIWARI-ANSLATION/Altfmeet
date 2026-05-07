@@ -35,9 +35,10 @@ const SFU_ENABLED = import.meta.env.VITE_ENABLE_SFU === 'true';
 const AUDIO_CONSTRAINTS = {
   echoCancellation: true,
   noiseSuppression: true,
-  autoGainControl: true,
+  autoGainControl: false,
   channelCount: { ideal: 1 },
   sampleRate: { ideal: 48000 },
+  latency: { ideal: 0.02 },
 };
 
 const CAMERA_CONSTRAINTS = {
@@ -514,13 +515,20 @@ const Room = () => {
       rtcpMuxPolicy: 'require',
       iceCandidatePoolSize: 4,
     });
-    const peer = { pc, pendingIce: [], restarted: false };
+    const peer = { pc, pendingIce: [], restarted: false, videoSender: null };
     peersRef.current.set(peerId, peer);
 
-    localStreamRef.current?.getTracks().forEach((track) => {
+    localStreamRef.current?.getAudioTracks().forEach((track) => {
       const sender = pc.addTrack(track, localStreamRef.current);
-      configureSender(sender, track.id === screenTrackRef.current?.id);
+      configureSender(sender, false);
     });
+
+    const outgoingVideoTrack = screenTrackRef.current || cameraTrackRef.current;
+    if (outgoingVideoTrack) {
+      const sender = pc.addTrack(outgoingVideoTrack, localStreamRef.current || new MediaStream([outgoingVideoTrack]));
+      peer.videoSender = sender;
+      configureSender(sender, outgoingVideoTrack.id === screenTrackRef.current?.id);
+    }
 
     pc.onicecandidate = (event) => {
       if (event.candidate) {
@@ -593,13 +601,24 @@ const Room = () => {
   }, [createPeer]);
 
   const replaceVideoTrack = useCallback((track) => {
-    peersRef.current.forEach(({ pc }) => {
-      const sender = pc.getSenders().find((item) => item.track?.kind === 'video');
-      sender?.replaceTrack(track)
-        .then(() => configureSender(sender, track?.id === screenTrackRef.current?.id))
-        .catch((err) => console.error('replaceTrack failed:', err));
+    peersRef.current.forEach((peer, peerId) => {
+      const { pc } = peer;
+      const sender = peer.videoSender || pc.getSenders().find((item) => item.track?.kind === 'video');
+      if (sender) {
+        peer.videoSender = sender;
+        sender.replaceTrack(track)
+          .then(() => configureSender(sender, track?.id === screenTrackRef.current?.id))
+          .catch((err) => console.error('replaceTrack failed:', err));
+        return;
+      }
+
+      if (!track) return;
+      const nextSender = pc.addTrack(track, localStreamRef.current || new MediaStream([track]));
+      peer.videoSender = nextSender;
+      configureSender(nextSender, track.id === screenTrackRef.current?.id);
+      createOffer(peerId);
     });
-  }, [configureSender]);
+  }, [configureSender, createOffer]);
 
   const updateMedia = useCallback((nextMedia) => {
     setMediaState((current) => {
@@ -948,6 +967,7 @@ const Room = () => {
   const toggleCamera = async () => {
     if (mediaState.camOn) {
       const track = cameraTrackRef.current;
+      if (!screenTrackRef.current) replaceVideoTrack(null);
       if (track) {
         localStreamRef.current?.removeTrack(track);
         track.stop();
@@ -969,7 +989,7 @@ const Room = () => {
       if (!localStreamRef.current) localStreamRef.current = new MediaStream();
       localStreamRef.current.addTrack(track);
       setLocalStream(localStreamRef.current ? new MediaStream(localStreamRef.current.getTracks()) : null);
-      replaceVideoTrack(track);
+      if (!screenTrackRef.current) replaceVideoTrack(track);
       await sfuSessionRef.current?.replaceProducerTrack('video', track);
       updateMedia({ camOn: true });
       addToast('Camera on', 'success');
