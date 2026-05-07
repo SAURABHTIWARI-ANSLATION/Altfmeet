@@ -4,7 +4,7 @@ const DEFAULT_ALLOWED_ORIGINS = [
   "http://localhost:3000",
   "http://localhost:5500",
   "http://127.0.0.1:5500",
-  "https://altfmeet.onrender.com",
+  "https://altfmeet-lqw2.onrender.com",
 ];
 
 const configuredOrigins = (process.env.FRONTEND_ORIGINS || "")
