@@ -124,6 +124,7 @@ function formatDuration(totalSeconds) {
 
 function VideoTile({ participant, stream, isLocal, isSpeaking }) {
   const videoRef = useRef(null);
+  const audioRef = useRef(null);
   const name = cleanName(participant?.name);
   const media = participant?.media || {};
   const showVideo = Boolean(stream?.getVideoTracks?.().length && media.camOn !== false);
@@ -131,16 +132,25 @@ function VideoTile({ participant, stream, isLocal, isSpeaking }) {
   useEffect(() => {
     if (videoRef.current && stream) {
       videoRef.current.srcObject = stream;
+      videoRef.current.play?.().catch(() => {});
     }
-  }, [stream]);
+    if (audioRef.current && stream && !isLocal) {
+      audioRef.current.srcObject = stream;
+      audioRef.current.play?.().catch(() => {});
+    }
+  }, [isLocal, stream]);
 
   return (
     <div className={`video-tile ${isSpeaking ? 'speaking' : ''}`}>
+      {!isLocal && stream?.getAudioTracks?.().length > 0 && (
+        <audio ref={audioRef} autoPlay playsInline />
+      )}
+
       {showVideo ? (
         <video
           ref={videoRef}
           autoPlay
-          muted={isLocal}
+          muted
           playsInline
           className="h-full w-full object-cover"
         />
@@ -967,6 +977,7 @@ const Room = () => {
       sfuSessionRef.current?.closeProducer('screen');
       const cameraTrack = cameraTrackRef.current || localStreamRef.current?.getVideoTracks()[0] || null;
       if (cameraTrack) replaceVideoTrack(cameraTrack);
+      setLocalStream(localStreamRef.current ? new MediaStream(localStreamRef.current.getTracks()) : null);
       updateMedia({ screenSharing: false, camOn: Boolean(cameraTrack) });
       addToast('Screen share stopped', 'default');
       return;
@@ -982,12 +993,17 @@ const Room = () => {
       screenTrackRef.current = screenTrack;
       replaceVideoTrack(screenTrack);
       await sfuSessionRef.current?.replaceProducerTrack('screen', screenTrack);
+      setLocalStream(new MediaStream([
+        ...(localStreamRef.current?.getAudioTracks?.() || []),
+        screenTrack,
+      ]));
       updateMedia({ screenSharing: true, camOn: true });
       addToast('Screen share started', 'success');
       screenTrack.onended = () => {
         const cameraTrack = cameraTrackRef.current || localStreamRef.current?.getVideoTracks()[0] || null;
         sfuSessionRef.current?.closeProducer('screen');
         if (cameraTrack) replaceVideoTrack(cameraTrack);
+        setLocalStream(localStreamRef.current ? new MediaStream(localStreamRef.current.getTracks()) : null);
         updateMedia({ screenSharing: false, camOn: Boolean(cameraTrack) });
         addToast('Screen share stopped', 'default');
       };
