@@ -21,4 +21,8 @@ export const api = {
     const response = await fetch(`${API_BASE_URL}/meetings/${meetingId}`);
     return response.json();
   },
+  getIceServers: async () => {
+    const response = await fetch(`${API_BASE_URL}/ice-servers`);
+    return response.json();
+  },
 };

@@ -5,6 +5,7 @@ import {
   CameraOff,
   ChevronDown,
   Check,
+  Activity,
   LogOut,
   MessageCircle,
   Mic,
@@ -27,7 +28,68 @@ import {
 } from '../services/socket';
 import { api } from '../services/api';
 
-const ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }];
+const DEFAULT_ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }];
+
+const AUDIO_CONSTRAINTS = {
+  echoCancellation: true,
+  noiseSuppression: true,
+  autoGainControl: true,
+  channelCount: { ideal: 1 },
+  sampleRate: { ideal: 48000 },
+};
+
+const CAMERA_CONSTRAINTS = {
+  width: { ideal: 640, max: 960 },
+  height: { ideal: 360, max: 540 },
+  frameRate: { ideal: 20, max: 24 },
+};
+
+const SCREEN_CONSTRAINTS = {
+  width: { ideal: 1280, max: 1920 },
+  height: { ideal: 720, max: 1080 },
+  frameRate: { ideal: 12, max: 15 },
+};
+
+const QUALITY_LABELS = {
+  good: 'Good',
+  fair: 'Fair',
+  poor: 'Poor',
+  reconnecting: 'Reconnecting',
+};
+
+const qualityForStats = ({ rtt = 0, jitter = 0, packetLoss = 0 } = {}) => {
+  if (packetLoss > 8 || rtt > 650 || jitter > 80) return 'poor';
+  if (packetLoss > 3 || rtt > 300 || jitter > 35) return 'fair';
+  return 'good';
+};
+
+const qualityModeFor = (participantCount, networkQuality) => {
+  if (networkQuality === 'poor' || participantCount >= 14) return 'audio-first';
+  if (networkQuality === 'fair' || participantCount >= 8) return 'low';
+  if (participantCount >= 5) return 'medium';
+  return 'high';
+};
+
+const bitrateFor = (kind, mode, screenSharing = false) => {
+  if (kind === 'audio') return 32000;
+  if (screenSharing) {
+    if (mode === 'audio-first') return 650000;
+    if (mode === 'low') return 900000;
+    return 1400000;
+  }
+  if (mode === 'audio-first') return 90000;
+  if (mode === 'low') return 160000;
+  if (mode === 'medium') return 280000;
+  return 450000;
+};
+
+const clampTrack = async (track, constraints) => {
+  try {
+    await track?.applyConstraints?.(constraints);
+  } catch (err) {
+    console.warn('Track constraints could not be applied:', err);
+  }
+};
 
 function cleanName(name) {
   const trimmed = typeof name === 'string' ? name.trim().replace(/\s+/g, ' ') : '';
@@ -139,6 +201,9 @@ const Room = () => {
   const [speakingIds, setSpeakingIds] = useState(new Set());
   const [connectionStatus, setConnectionStatus] = useState('idle');
   const [connectionError, setConnectionError] = useState('');
+  const [networkQuality, setNetworkQuality] = useState('good');
+  const [qualityMode, setQualityMode] = useState('high');
+  const [mediaStats, setMediaStats] = useState({ rtt: 0, jitter: 0, packetLoss: 0, bitrate: 0, droppedFrames: 0 });
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [toasts, setToasts] = useState([]);
@@ -156,6 +221,10 @@ const Room = () => {
   const audioContextRef = useRef(null);
   const analyserCleanupRef = useRef(new Map());
   const controlsTimerRef = useRef(null);
+  const iceServersRef = useRef(DEFAULT_ICE_SERVERS);
+  const statsSnapshotRef = useRef(new Map());
+  const participantCountRef = useRef(1);
+  const qualityModeRef = useRef('high');
 
   const displayName = cleanName(preJoinName);
   const inviteUrl = `${window.location.origin}/room/${roomId}`;
@@ -207,6 +276,13 @@ const Room = () => {
     return 'meeting-grid many';
   }, [visibleParticipants.length]);
 
+  useEffect(() => {
+    participantCountRef.current = visibleParticipants.length;
+    const nextMode = qualityModeFor(visibleParticipants.length, networkQuality);
+    qualityModeRef.current = nextMode;
+    setQualityMode(nextMode);
+  }, [networkQuality, visibleParticipants.length]);
+
   const setSpeaking = useCallback((id, speaking) => {
     setSpeakingIds((current) => {
       const next = new Set(current);
@@ -219,6 +295,7 @@ const Room = () => {
   const monitorAudio = useCallback((id, stream) => {
     analyserCleanupRef.current.get(id)?.();
     if (!stream?.getAudioTracks().length) return;
+    if (id !== 'local' && participantCountRef.current > 8) return;
 
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
     if (!AudioContextClass) return;
@@ -248,23 +325,58 @@ const Room = () => {
     });
   }, [setSpeaking]);
 
+  const configureSender = useCallback(async (sender, screenSharing = false) => {
+    if (!sender?.track) return;
+    const params = sender.getParameters();
+    params.encodings = params.encodings?.length ? params.encodings : [{}];
+    params.encodings[0].maxBitrate = bitrateFor(sender.track.kind, qualityModeRef.current, screenSharing);
+    params.degradationPreference = screenSharing ? 'maintain-resolution' : 'maintain-framerate';
+    if (sender.track.kind === 'audio') {
+      params.encodings[0].priority = 'high';
+      params.encodings[0].networkPriority = 'high';
+    }
+    try {
+      await sender.setParameters(params);
+    } catch (err) {
+      console.warn('Sender parameters could not be applied:', err);
+    }
+  }, []);
+
+  const tunePeerSenders = useCallback(() => {
+    peersRef.current.forEach(({ pc }) => {
+      pc.getSenders().forEach((sender) => {
+        configureSender(sender, sender.track?.id === screenTrackRef.current?.id);
+      });
+    });
+  }, [configureSender]);
+
+  useEffect(() => {
+    tunePeerSenders();
+  }, [qualityMode, tunePeerSenders]);
+
   const startPreview = useCallback(async () => {
     if (localStreamRef.current) return localStreamRef.current;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: CAMERA_CONSTRAINTS,
+        audio: AUDIO_CONSTRAINTS,
+      });
       localStreamRef.current = stream;
       setLocalStream(stream);
       cameraTrackRef.current = stream.getVideoTracks()[0] || null;
+      await clampTrack(cameraTrackRef.current, CAMERA_CONSTRAINTS);
+      await clampTrack(stream.getAudioTracks()[0], AUDIO_CONSTRAINTS);
       monitorAudio('local', stream);
       return stream;
     } catch (err) {
       console.error('Preview media error:', err);
       setConnectionError('Camera or microphone access was blocked. You can retry after allowing permissions.');
       try {
-        const audioOnly = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const audioOnly = await navigator.mediaDevices.getUserMedia({ audio: AUDIO_CONSTRAINTS });
         localStreamRef.current = audioOnly;
         setLocalStream(audioOnly);
         setMediaState((current) => ({ ...current, camOn: false }));
+        await clampTrack(audioOnly.getAudioTracks()[0], AUDIO_CONSTRAINTS);
         monitorAudio('local', audioOnly);
         return audioOnly;
       } catch (audioErr) {
@@ -297,12 +409,18 @@ const Room = () => {
     const existing = peersRef.current.get(peerId);
     if (existing) return existing;
 
-    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    const pc = new RTCPeerConnection({
+      iceServers: iceServersRef.current,
+      bundlePolicy: 'max-bundle',
+      rtcpMuxPolicy: 'require',
+      iceCandidatePoolSize: 4,
+    });
     const peer = { pc, pendingIce: [], restarted: false };
     peersRef.current.set(peerId, peer);
 
     localStreamRef.current?.getTracks().forEach((track) => {
-      pc.addTrack(track, localStreamRef.current);
+      const sender = pc.addTrack(track, localStreamRef.current);
+      configureSender(sender, track.id === screenTrackRef.current?.id);
     });
 
     pc.onicecandidate = (event) => {
@@ -340,6 +458,10 @@ const Room = () => {
       if (pc.connectionState === 'disconnected' || pc.connectionState === 'closed') {
         setSpeaking(peerId, false);
       }
+      if (pc.connectionState === 'connected') setConnectionStatus('connected');
+      if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+        setNetworkQuality('reconnecting');
+      }
     };
 
     pc.oniceconnectionstatechange = () => {
@@ -347,7 +469,7 @@ const Room = () => {
     };
 
     return peer;
-  }, [monitorAudio, setSpeaking]);
+  }, [configureSender, monitorAudio, setSpeaking]);
 
   const flushPendingIce = useCallback(async (peer) => {
     while (peer.pendingIce.length && peer.pc.remoteDescription) {
@@ -374,9 +496,11 @@ const Room = () => {
   const replaceVideoTrack = useCallback((track) => {
     peersRef.current.forEach(({ pc }) => {
       const sender = pc.getSenders().find((item) => item.track?.kind === 'video');
-      sender?.replaceTrack(track).catch((err) => console.error('replaceTrack failed:', err));
+      sender?.replaceTrack(track)
+        .then(() => configureSender(sender, track?.id === screenTrackRef.current?.id))
+        .catch((err) => console.error('replaceTrack failed:', err));
     });
-  }, []);
+  }, [configureSender]);
 
   const updateMedia = useCallback((nextMedia) => {
     setMediaState((current) => {
@@ -415,6 +539,16 @@ const Room = () => {
     setConnectionStatus('connecting');
     setConnectionError('');
     setHasJoined(true);
+
+    try {
+      const iceConfig = await api.getIceServers();
+      if (Array.isArray(iceConfig?.iceServers) && iceConfig.iceServers.length) {
+        iceServersRef.current = iceConfig.iceServers;
+      }
+    } catch (err) {
+      console.warn('Using fallback ICE servers:', err);
+      iceServersRef.current = DEFAULT_ICE_SERVERS;
+    }
 
     const stream = localStreamRef.current || await startPreview();
     if (!stream?.getVideoTracks().length) {
@@ -590,6 +724,71 @@ const Room = () => {
 
   useEffect(() => {
     if (!hasJoined) return undefined;
+
+    const collectStats = async () => {
+      let outboundBytes = 0;
+      let inboundPacketsLost = 0;
+      let inboundPackets = 0;
+      let jitterTotal = 0;
+      let jitterSamples = 0;
+      let rttTotal = 0;
+      let rttSamples = 0;
+      let droppedFrames = 0;
+      const now = performance.now();
+
+      await Promise.all(Array.from(peersRef.current.values()).map(async ({ pc }) => {
+        if (pc.connectionState === 'closed') return;
+        const report = await pc.getStats();
+        report.forEach((stat) => {
+          if (stat.type === 'outbound-rtp' && !stat.isRemote) {
+            outboundBytes += stat.bytesSent || 0;
+            droppedFrames += stat.framesDropped || 0;
+          }
+          if (stat.type === 'inbound-rtp' && !stat.isRemote) {
+            inboundPacketsLost += Math.max(0, stat.packetsLost || 0);
+            inboundPackets += Math.max(0, stat.packetsReceived || 0) + Math.max(0, stat.packetsLost || 0);
+            if (typeof stat.jitter === 'number') {
+              jitterTotal += stat.jitter * 1000;
+              jitterSamples += 1;
+            }
+            droppedFrames += stat.framesDropped || 0;
+          }
+          if (stat.type === 'candidate-pair' && stat.state === 'succeeded' && stat.nominated && typeof stat.currentRoundTripTime === 'number') {
+            rttTotal += stat.currentRoundTripTime * 1000;
+            rttSamples += 1;
+          }
+        });
+      }));
+
+      const previous = statsSnapshotRef.current.get('room');
+      const bitrate = previous
+        ? Math.max(0, ((outboundBytes - previous.bytes) * 8) / ((now - previous.at) / 1000))
+        : 0;
+      statsSnapshotRef.current.set('room', { bytes: outboundBytes, at: now });
+
+      const packetLoss = inboundPackets > 0 ? (inboundPacketsLost / inboundPackets) * 100 : 0;
+      const nextStats = {
+        rtt: rttSamples ? Math.round(rttTotal / rttSamples) : 0,
+        jitter: jitterSamples ? Math.round(jitterTotal / jitterSamples) : 0,
+        packetLoss: Number(packetLoss.toFixed(1)),
+        bitrate: Math.round(bitrate / 1000),
+        droppedFrames,
+      };
+      setMediaStats(nextStats);
+
+      const nextQuality = qualityForStats(nextStats);
+      setNetworkQuality((current) => (current === 'reconnecting' && nextQuality === 'good' ? 'fair' : nextQuality));
+    };
+
+    const statsTimer = window.setInterval(() => {
+      collectStats().catch((err) => console.warn('WebRTC stats collection failed:', err));
+    }, 2000);
+
+    return () => window.clearInterval(statsTimer);
+  }, [hasJoined]);
+
+  useEffect(() => {
+    if (!hasJoined) return undefined;
     controlsTimerRef.current = window.setTimeout(() => setControlsVisible(false), 3000);
     return () => window.clearTimeout(controlsTimerRef.current);
   }, [hasJoined]);
@@ -640,9 +839,10 @@ const Room = () => {
     }
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      const stream = await navigator.mediaDevices.getUserMedia({ video: CAMERA_CONSTRAINTS });
       const [track] = stream.getVideoTracks();
       if (!track) return;
+      await clampTrack(track, CAMERA_CONSTRAINTS);
       cameraTrackRef.current = track;
       if (!localStreamRef.current) localStreamRef.current = new MediaStream();
       localStreamRef.current.addTrack(track);
@@ -667,8 +867,12 @@ const Room = () => {
     }
 
     try {
-      const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+      const screenStream = await navigator.mediaDevices.getDisplayMedia({
+        video: SCREEN_CONSTRAINTS,
+        audio: false,
+      });
       const [screenTrack] = screenStream.getVideoTracks();
+      await clampTrack(screenTrack, SCREEN_CONSTRAINTS);
       screenTrackRef.current = screenTrack;
       replaceVideoTrack(screenTrack);
       updateMedia({ screenSharing: true, camOn: true });
@@ -834,6 +1038,13 @@ const Room = () => {
           </button>
 
           <div className="flex min-w-0 justify-end gap-2">
+            <div
+              className={`health-pill ${networkQuality}`}
+              title={`RTT ${mediaStats.rtt}ms · Jitter ${mediaStats.jitter}ms · Loss ${mediaStats.packetLoss}% · Up ${mediaStats.bitrate}kbps · Mode ${qualityMode}`}
+            >
+              <Activity size={16} />
+              <span>{QUALITY_LABELS[networkQuality] || 'Good'}</span>
+            </div>
             <div className="pill">
               {formatDuration(elapsedSeconds)}
             </div>
@@ -872,6 +1083,12 @@ const Room = () => {
               <Copy size={16} />
               Copy invite link
             </button>
+          </div>
+        )}
+
+        {qualityMode === 'audio-first' && (
+          <div className="network-advice">
+            Weak network detected. Audio is prioritized and video bitrate is reduced.
           </div>
         )}
 
