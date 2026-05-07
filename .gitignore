@@ -36,6 +36,10 @@ lerna-debug.log*
 *.swp
 *.swo
 
+# GSD / Antigravity
+.agent/
+.codex/
+
 # OS
 .DS_Store
 Thumbs.db
