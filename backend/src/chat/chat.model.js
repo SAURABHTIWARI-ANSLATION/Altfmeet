@@ -1,14 +1,14 @@
 // src/chat/chat.model.js
-import { db as firebaseDb } from "../config/firebase.js";
-import { collection, addDoc, query, where, getDocs, orderBy, limit, serverTimestamp } from "firebase/firestore";
+import { adminDb, firebaseAdmin } from "../auth/firebase-admin.js";
 
 export async function saveMessage(meetingId, userId, message, time) {
   try {
-    const docRef = await addDoc(collection(firebaseDb, "messages"), {
+    const docRef = await adminDb.collection("messages").add({
       meetingId,
       userId,
       message,
-      timestamp: serverTimestamp() || time,
+      time,
+      timestamp: firebaseAdmin.firestore.FieldValue.serverTimestamp(),
     });
     return { id: docRef.id, meetingId, userId, message };
   } catch (err) {
@@ -19,15 +19,14 @@ export async function saveMessage(meetingId, userId, message, time) {
 
 export async function fetchMessages(meetingId, messageLimit = 50) {
   try {
-    const q = query(
-      collection(firebaseDb, "messages"),
-      where("meetingId", "==", meetingId),
-      orderBy("timestamp", "asc"),
-      limit(messageLimit)
-    );
-    
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const querySnapshot = await adminDb
+      .collection("messages")
+      .where("meetingId", "==", meetingId)
+      .orderBy("timestamp", "asc")
+      .limit(messageLimit)
+      .get();
+
+    return querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
   } catch (err) {
     console.error("Firestore fetch error:", err);
     return [];

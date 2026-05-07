@@ -22,12 +22,17 @@ export function setupSignaling(io) {
         socket.emit("ROOM_ERROR", { error: "Missing meetingId" });
         return;
       }
+      const authenticatedUserId = socket.data.auth?.uid;
+      if (!authenticatedUserId) {
+        socket.emit("ROOM_ERROR", { error: "Authentication required" });
+        return;
+      }
 
       const existingParticipants = listParticipants(normalizedRoomId);
       const participant = joinRoom({
         socket,
         roomId: normalizedRoomId,
-        userId,
+        userId: authenticatedUserId || userId,
         name: normalizeName(name, socket.id),
         media,
       });
@@ -141,9 +146,10 @@ export function setupSignaling(io) {
     });
 
     socket.on("LEGACY_JOIN_MEETING", ({ meetingId, userId }) => {
+      if (!socket.data.auth?.uid) return;
       socket.join(meetingId);
       socket.to(meetingId).emit(SIGNALING_EVENTS.USER_JOINED, {
-        userId,
+        userId: socket.data.auth.uid || userId,
         socketId: socket.id,
       });
     });

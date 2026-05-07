@@ -772,7 +772,7 @@ const Room = () => {
       joinMedia = { ...joinMedia, camOn: false };
     }
 
-    const socket = initiateSocketConnection();
+    const socket = await initiateSocketConnection();
     let sfuStarted = false;
     socket.off('connect');
     socket.off('connect_error');

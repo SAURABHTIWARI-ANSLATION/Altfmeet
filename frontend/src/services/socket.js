@@ -1,12 +1,15 @@
 import { io } from "socket.io-client";
 import { BACKEND_URL } from "./config";
+import { getAuthToken } from "./authToken";
 
 let socket;
 
-export const initiateSocketConnection = () => {
+export const initiateSocketConnection = async () => {
   if (socket?.connected) return socket;
+  const token = await getAuthToken();
 
   socket = io(BACKEND_URL, {
+    auth: { token },
     transports: ["websocket"],
   });
   

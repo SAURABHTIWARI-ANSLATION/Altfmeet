@@ -1,17 +1,15 @@
 // src/meetings/meeting.model.js
-import { db as firebaseDb } from "../config/firebase.js";
-import { collection, addDoc, getDoc, doc, serverTimestamp } from "firebase/firestore";
+import { adminDb, firebaseAdmin } from "../auth/firebase-admin.js";
 
 export async function createMeetingRecord(hostId, title) {
   try {
-    // Primary Storage: Firestore
-    const docRef = await addDoc(collection(firebaseDb, "meetings"), {
+    const docRef = await adminDb.collection("meetings").add({
       hostId,
       title,
-      createdAt: serverTimestamp(),
+      createdAt: firebaseAdmin.firestore.FieldValue.serverTimestamp(),
     });
     
-    return { id: docRef.id, title };
+    return { id: docRef.id, hostId, title };
   } catch (err) {
     console.error("Firestore creation error:", err);
     throw err;
@@ -20,12 +18,12 @@ export async function createMeetingRecord(hostId, title) {
 
 export async function addParticipant(meetingId, userId) {
   try {
-    await addDoc(collection(firebaseDb, "participants"), {
+    await adminDb.collection("participants").add({
       meetingId,
       userId,
-      joinedAt: serverTimestamp(),
+      joinedAt: firebaseAdmin.firestore.FieldValue.serverTimestamp(),
     });
-    return { success: true };
+    return { success: true, meetingId, userId };
   } catch (err) {
     console.error("Firestore participant error:", err);
     throw err;
@@ -34,10 +32,9 @@ export async function addParticipant(meetingId, userId) {
 
 export async function getMeetingById(meetingId) {
   try {
-    const docRef = doc(firebaseDb, "meetings", meetingId);
-    const docSnap = await getDoc(docRef);
+    const docSnap = await adminDb.collection("meetings").doc(meetingId).get();
     
-    if (docSnap.exists()) {
+    if (docSnap.exists) {
       return { id: docSnap.id, ...docSnap.data() };
     }
     return null;

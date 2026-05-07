@@ -5,7 +5,7 @@ import { initRoomMedia } from "../media/sfu.service.js";
 
 export async function createMeeting(req, res, next) {
   try {
-    const hostId = req.body.hostId || `user_${Date.now()}`;
+    const hostId = req.auth?.uid || req.body.hostId || `user_${Date.now()}`;
     const title = req.body.title || "Untitled Meeting";
 
     const meeting = await MeetingService.createMeeting(hostId, title);
@@ -22,7 +22,7 @@ export async function createMeeting(req, res, next) {
 export async function joinMeeting(req, res, next) {
   try {
     const { meetingId } = req.params;
-    const { userId } = req.body;
+    const userId = req.auth?.uid || req.body.userId;
     initRoomMedia(meetingId);
     const result = await MeetingService.joinMeeting(meetingId, userId);
     res.json({ success: true, data: result });

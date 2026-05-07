@@ -12,6 +12,7 @@ import { setupChat } from "./chat/chat.gateway.js";
 import { setupMediasoup } from "./media/mediasoup.config.js";
 import { setupMedia } from "./media/media.gateway.js";
 import { corsOptions } from "./config/cors.js";
+import { authenticateSocket } from "./auth/auth.middleware.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -30,6 +31,7 @@ const server = http.createServer(app);
 const io = new Server(server, {
   cors: corsOptions,
 });
+io.use(authenticateSocket);
 
 // Setup Mediasoup SFU before accepting RTC clients.
 await setupMediasoup(io);
